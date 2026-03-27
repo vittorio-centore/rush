@@ -15,11 +15,15 @@ application workflow management.
 Install dependencies and start the development server:
 
 ```bash
+cp .env.example .env.local
 pnpm install
 pnpm dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+Set the values in `.env.local` from your Supabase project before using auth or
+database features.
 
 ## Current Scope
 
