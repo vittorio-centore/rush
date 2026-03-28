@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function Home() {
   return (
     <main className="flex min-h-screen flex-col bg-stone-950 text-stone-100">
@@ -14,6 +16,21 @@ export default function Home() {
             tracking, and recruiter workflows. Recommendations come later, once
             the product has real usage data.
           </p>
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Link
+            href="/auth"
+            className="inline-flex min-h-12 items-center justify-center rounded-full bg-amber-300 px-6 py-3 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
+          >
+            Sign in
+          </Link>
+          <Link
+            href="/dashboard"
+            className="inline-flex min-h-12 items-center justify-center rounded-full border border-stone-700 px-6 py-3 text-sm font-semibold text-stone-100 transition hover:border-stone-500 hover:bg-stone-800/60"
+          >
+            Open dashboard
+          </Link>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3">
