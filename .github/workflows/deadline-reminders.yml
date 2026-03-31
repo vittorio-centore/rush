@@ -1,0 +1,18 @@
+name: Deadline Reminders
+
+on:
+  schedule:
+    # Every Monday at 9am UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch: # allow manual runs
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger deadline reminders
+        run: |
+          curl -s -X POST "${{ secrets.APP_URL }}/api/cron/deadline-reminders" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            --fail-with-body
