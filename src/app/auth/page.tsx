@@ -26,125 +26,108 @@ export default async function AuthPage({ searchParams }: AuthPageProps) {
   const message = resolvedSearchParams.message;
 
   return (
-    <main className="flex min-h-screen bg-stone-950 text-stone-100">
-      <section className="mx-auto flex w-full max-w-6xl flex-col gap-12 px-6 py-16 sm:px-10 lg:flex-row lg:items-start lg:justify-between lg:px-12">
-        <div className="max-w-2xl space-y-6">
-          <Link
-            href="/"
-            className="text-sm font-medium uppercase tracking-[0.24em] text-amber-300"
-          >
+    <div className="flex min-h-screen flex-col bg-slate-50 lg:flex-row">
+      {/* Left panel */}
+      <div className="flex flex-col justify-center px-8 py-12 lg:w-1/2 lg:px-16 lg:py-20">
+        <div className="mx-auto w-full max-w-sm space-y-6 lg:mx-0">
+          <Link href="/" className="text-sm font-semibold text-slate-900 hover:text-slate-700 transition-colors">
             Rush
           </Link>
-          <h1 className="text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
-            Sign in to track applications and follow club recruiting deadlines.
-          </h1>
-          <p className="max-w-xl text-base leading-8 text-stone-300 sm:text-lg">
-            Start with email and password auth. Once that works cleanly, the
-            student dashboard, follows, and club workflows can build on top of
-            the same session model.
+          <div className="space-y-3">
+            <h1 className="text-2xl font-bold text-slate-900">Sign in to Rush</h1>
+            <p className="text-sm leading-relaxed text-slate-600">
+              Track your club applications and never miss a deadline.
+            </p>
+          </div>
+          <div className="border-t border-slate-200" />
+          <p className="text-sm text-slate-400">
+            Trusted by students at University of Michigan.
           </p>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <article className="rounded-2xl border border-stone-800 bg-stone-900/70 p-5">
-              <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-stone-200">
-                Student flow
-              </h2>
-              <p className="mt-3 text-sm leading-7 text-stone-400">
-                Save clubs, monitor deadlines, and keep your recruiting process
-                organized in one account.
+        </div>
+      </div>
+
+      {/* Right panel — form */}
+      <div className="flex flex-col justify-center px-8 py-12 lg:w-1/2 lg:px-16 lg:py-20">
+        <div className="mx-auto w-full max-w-sm">
+          <div className="rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
+            <div className="mb-6 space-y-1">
+              <h2 className="text-lg font-semibold text-slate-900">Account access</h2>
+              <p className="text-sm text-slate-500">Sign in or create a new account below.</p>
+            </div>
+
+            {message ? (
+              <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+                {message}
               </p>
-            </article>
-            <article className="rounded-2xl border border-stone-800 bg-stone-900/70 p-5">
-              <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-stone-200">
-                Club flow
-              </h2>
-              <p className="mt-3 text-sm leading-7 text-stone-400">
-                Claim your org page later and manage applicants with the same
-                underlying auth and permissions system.
+            ) : null}
+
+            {error ? (
+              <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                {error}
               </p>
-            </article>
+            ) : null}
+
+            <form className="space-y-4">
+              <div className="space-y-1">
+                <label htmlFor="full_name" className="block text-sm font-medium text-slate-700">
+                  Full name
+                </label>
+                <input
+                  id="full_name"
+                  name="full_name"
+                  type="text"
+                  placeholder="Alex Morgan"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label htmlFor="email" className="block text-sm font-medium text-slate-700">
+                  Email
+                </label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  required
+                  placeholder="you@umich.edu"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label htmlFor="password" className="block text-sm font-medium text-slate-700">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  required
+                  minLength={8}
+                  placeholder="At least 8 characters"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="flex flex-col gap-3 pt-2 sm:flex-row">
+                <button
+                  formAction={signIn}
+                  className="inline-flex flex-1 items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+                >
+                  Sign in
+                </button>
+                <button
+                  formAction={signUp}
+                  className="inline-flex flex-1 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                >
+                  Create account
+                </button>
+              </div>
+            </form>
           </div>
         </div>
-
-        <div className="w-full max-w-md rounded-3xl border border-stone-800 bg-stone-900/80 p-7 shadow-2xl shadow-black/30">
-          <div className="space-y-2">
-            <h2 className="text-2xl font-semibold">Account access</h2>
-            <p className="text-sm leading-7 text-stone-400">
-              Use the same form to sign in or create an account.
-            </p>
-          </div>
-
-          {message ? (
-            <p className="mt-6 rounded-2xl border border-emerald-700/40 bg-emerald-950/50 px-4 py-3 text-sm leading-6 text-emerald-200">
-              {message}
-            </p>
-          ) : null}
-
-          {error ? (
-            <p className="mt-6 rounded-2xl border border-rose-700/40 bg-rose-950/50 px-4 py-3 text-sm leading-6 text-rose-200">
-              {error}
-            </p>
-          ) : null}
-
-          <form className="mt-6 space-y-4">
-            <div className="space-y-2">
-              <label htmlFor="full_name" className="text-sm font-medium text-stone-200">
-                Full name
-              </label>
-              <input
-                id="full_name"
-                name="full_name"
-                type="text"
-                placeholder="Alex Morgan"
-                className="w-full rounded-2xl border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-stone-100 outline-none transition focus:border-amber-400"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium text-stone-200">
-                Email
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                required
-                placeholder="you@umich.edu"
-                className="w-full rounded-2xl border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-stone-100 outline-none transition focus:border-amber-400"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="password" className="text-sm font-medium text-stone-200">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                minLength={8}
-                placeholder="At least 8 characters"
-                className="w-full rounded-2xl border border-stone-700 bg-stone-950 px-4 py-3 text-sm text-stone-100 outline-none transition focus:border-amber-400"
-              />
-            </div>
-
-            <div className="flex flex-col gap-3 pt-2 sm:flex-row">
-              <button
-                formAction={signIn}
-                className="inline-flex min-h-12 flex-1 items-center justify-center rounded-full bg-amber-300 px-5 py-3 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
-              >
-                Sign in
-              </button>
-              <button
-                formAction={signUp}
-                className="inline-flex min-h-12 flex-1 items-center justify-center rounded-full border border-stone-700 bg-transparent px-5 py-3 text-sm font-semibold text-stone-100 transition hover:border-stone-500 hover:bg-stone-800/60"
-              >
-                Create account
-              </button>
-            </div>
-          </form>
-        </div>
-      </section>
-    </main>
+      </div>
+    </div>
   );
 }

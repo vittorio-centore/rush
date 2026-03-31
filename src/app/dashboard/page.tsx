@@ -1,97 +1,224 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
-import { signOut } from "@/app/auth/actions";
 import { createClient } from "@/lib/supabase/server";
+
+const STATUS_LABELS: Record<string, string> = {
+  open: "Open",
+  closed: "Closed",
+  rolling: "Rolling",
+  unknown: "Status unknown",
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  open: "inline-flex items-center rounded-md bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20",
+  closed: "inline-flex items-center rounded-md bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600 ring-1 ring-inset ring-red-500/20",
+  rolling: "inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20",
+  unknown: "inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-400/20",
+};
+
+function daysUntil(dateStr: string): number {
+  const now = new Date();
+  const deadline = new Date(dateStr);
+  return Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function relativeDate(dateStr: string): string {
+  const days = daysUntil(dateStr);
+  if (days === 0) return "today";
+  if (days === 1) return "in 1 day";
+  if (days > 0) return `in ${days} days`;
+  return "passed";
+}
+
+type Club = {
+  id: string;
+  slug: string;
+  name: string;
+  recruiting_status: string;
+  category: string | null;
+};
+
+type Deadline = {
+  title: string;
+  deadline_at: string;
+  clubs: { name: string; slug: string } | { name: string; slug: string }[] | null;
+};
 
 export default async function DashboardPage() {
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
 
+  // Layout handles auth redirect, but we still need the user for queries.
+  // If somehow called without auth, return nothing (layout will have redirected).
   if (!data.user) {
-    redirect("/auth");
+    return null;
   }
 
-  const fullName =
-    typeof data.user.user_metadata.full_name === "string" &&
-    data.user.user_metadata.full_name.length > 0
-      ? data.user.user_metadata.full_name
-      : data.user.email;
+  const user = data.user;
+
+  // Fetch user profile for display name
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("id", user.id)
+    .limit(1)
+    .single();
+
+  const displayName =
+    profile?.full_name ??
+    (typeof user.user_metadata?.full_name === "string" && user.user_metadata.full_name.length > 0
+      ? user.user_metadata.full_name
+      : user.email) ??
+    "Student";
+
+  // Fetch followed clubs (up to 6)
+  const { data: followRows } = await supabase
+    .from("user_follows")
+    .select("club_id, clubs(id, slug, name, recruiting_status, category)")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(6);
+
+  const followedClubs: Club[] = (followRows ?? []).flatMap((row) => {
+    const c = row.clubs;
+    if (!c) return [];
+    const club = Array.isArray(c) ? c[0] : c;
+    if (!club) return [];
+    return [club as Club];
+  });
+
+  const followedClubIds = followedClubs.map((c) => c.id);
+
+  // Fetch upcoming deadlines for followed clubs
+  let upcomingDeadlines: Deadline[] = [];
+  if (followedClubIds.length > 0) {
+    const { data: deadlineRows } = await supabase
+      .from("club_deadlines")
+      .select("title, deadline_at, clubs(name, slug)")
+      .in("club_id", followedClubIds)
+      .eq("is_active", true)
+      .gt("deadline_at", new Date().toISOString())
+      .order("deadline_at")
+      .limit(5);
+
+    upcomingDeadlines = (deadlineRows ?? []) as Deadline[];
+  }
 
   return (
-    <main className="flex min-h-screen bg-stone-950 text-stone-100">
-      <section className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 px-6 py-16 sm:px-10 lg:px-12">
-        <div className="flex flex-col gap-6 rounded-3xl border border-stone-800 bg-stone-900/75 p-8">
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-            <div className="space-y-3">
-              <p className="text-sm font-medium uppercase tracking-[0.24em] text-amber-300">
-                Rush dashboard
-              </p>
-              <h1 className="text-4xl font-semibold tracking-tight text-balance">
-                Welcome back, {fullName}.
-              </h1>
-              <p className="max-w-2xl text-base leading-8 text-stone-300">
-                Auth is live. This protected page confirms the Supabase session,
-                profile trigger, and cookie refresh flow are all working.
-              </p>
-            </div>
+    <div className="flex flex-col gap-8">
+      {/* Page heading */}
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
+        <p className="text-sm text-slate-500 mt-1">Welcome back, {displayName}</p>
+      </div>
 
-            <form action={signOut}>
-              <button className="inline-flex min-h-11 items-center justify-center rounded-full border border-stone-700 px-5 py-2 text-sm font-semibold text-stone-100 transition hover:border-stone-500 hover:bg-stone-800/60">
-                Sign out
-              </button>
-            </form>
+      {/* Followed clubs section */}
+      <section>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">
+          Followed clubs
+        </p>
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          {followedClubs.length === 0 ? (
+            <div className="px-4 py-8 text-center text-sm text-slate-400">
+              You haven&apos;t followed any clubs yet.{" "}
+              <Link href="/clubs" className="text-blue-600 hover:underline">
+                Browse clubs
+              </Link>
+            </div>
+          ) : (
+            <ul>
+              {followedClubs.map((club) => {
+                const statusClass =
+                  STATUS_COLORS[club.recruiting_status] ?? STATUS_COLORS.unknown;
+                const statusLabel =
+                  STATUS_LABELS[club.recruiting_status] ?? club.recruiting_status;
+                return (
+                  <li
+                    key={club.id}
+                    className="flex items-center px-4 py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors"
+                  >
+                    <span className="text-sm font-medium text-slate-900 flex-1">
+                      {club.name}
+                    </span>
+                    {club.category && (
+                      <span className="text-xs text-slate-400 mr-4">
+                        {club.category}
+                      </span>
+                    )}
+                    <span className={`mr-4 ${statusClass}`}>{statusLabel}</span>
+                    <Link
+                      href={`/clubs/${club.slug}`}
+                      className="text-xs text-blue-600 hover:underline"
+                    >
+                      View →
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+        {followedClubs.length > 0 && (
+          <div className="mt-2 text-right">
+            <Link
+              href="/dashboard/follows"
+              className="text-xs text-blue-600 hover:underline"
+            >
+              See all followed clubs →
+            </Link>
           </div>
-
-          <dl className="grid gap-4 sm:grid-cols-2">
-            <div className="rounded-2xl border border-stone-800 bg-stone-950/60 p-5">
-              <dt className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">
-                Email
-              </dt>
-              <dd className="mt-3 text-sm text-stone-100">{data.user.email}</dd>
-            </div>
-            <div className="rounded-2xl border border-stone-800 bg-stone-950/60 p-5">
-              <dt className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">
-                User ID
-              </dt>
-              <dd className="mt-3 break-all text-sm text-stone-100">
-                {data.user.id}
-              </dd>
-            </div>
-          </dl>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-3">
-          <article className="rounded-2xl border border-stone-800 bg-stone-900/70 p-5">
-            <h2 className="text-lg font-semibold">Next build slice</h2>
-            <p className="mt-2 text-sm leading-7 text-stone-400">
-              Use this session state to attach follows, applications, and saved
-              clubs to the authenticated user.
-            </p>
-          </article>
-          <article className="rounded-2xl border border-stone-800 bg-stone-900/70 p-5">
-            <h2 className="text-lg font-semibold">Schema status</h2>
-            <p className="mt-2 text-sm leading-7 text-stone-400">
-              The database already has `profiles`, `clubs`, `user_follows`, and
-              `user_applications` waiting behind RLS.
-            </p>
-          </article>
-          <article className="rounded-2xl border border-stone-800 bg-stone-900/70 p-5">
-            <h2 className="text-lg font-semibold">Immediate target</h2>
-            <p className="mt-2 text-sm leading-7 text-stone-400">
-              Build the club directory next so the first real product data has a
-              place to show up.
-            </p>
-          </article>
-        </div>
-
-        <Link
-          href="/"
-          className="text-sm font-medium text-stone-400 underline decoration-stone-700 underline-offset-4 transition hover:text-stone-200"
-        >
-          Back to homepage
-        </Link>
+        )}
       </section>
-    </main>
+
+      {/* Upcoming deadlines section */}
+      <section>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">
+          Upcoming deadlines
+        </p>
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          {upcomingDeadlines.length === 0 ? (
+            <div className="px-4 py-8 text-center text-sm text-slate-400">
+              {followedClubIds.length === 0
+                ? "Follow clubs to see their deadlines here."
+                : "No upcoming deadlines for your followed clubs."}
+            </div>
+          ) : (
+            <ul>
+              {upcomingDeadlines.map((d, i) => {
+                const clubData = Array.isArray(d.clubs) ? d.clubs[0] : d.clubs;
+                const days = daysUntil(d.deadline_at);
+                const isUrgent = days <= 7;
+                return (
+                  <li
+                    key={i}
+                    className="flex items-center px-4 py-3 border-b border-slate-100 last:border-0"
+                  >
+                    <div className="flex-1 min-w-0">
+                      {clubData && (
+                        <span className="text-sm font-medium text-slate-900 mr-2">
+                          {clubData.name}
+                        </span>
+                      )}
+                      <span className="text-sm text-slate-500">{d.title}</span>
+                    </div>
+                    <span className="text-xs text-slate-400 mr-3 shrink-0">
+                      {new Date(d.deadline_at).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </span>
+                    {isUrgent && (
+                      <span className="inline-flex items-center rounded-md bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600 ring-1 ring-inset ring-red-500/20 shrink-0">
+                        {relativeDate(d.deadline_at)}
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </section>
+    </div>
   );
 }

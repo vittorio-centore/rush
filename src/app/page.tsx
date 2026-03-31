@@ -2,61 +2,75 @@ import Link from "next/link";
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col bg-stone-950 text-stone-100">
-      <section className="mx-auto flex w-full max-w-5xl flex-1 flex-col justify-center gap-12 px-6 py-24 sm:px-10 lg:px-12">
-        <div className="space-y-5">
-          <p className="text-sm font-medium uppercase tracking-[0.24em] text-amber-300">
-            Rush
+    <div className="flex min-h-screen flex-col bg-slate-50">
+      {/* Header */}
+      <header className="border-b border-slate-200 bg-white">
+        <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-4 sm:px-10 lg:px-12">
+          <span className="text-base font-bold text-slate-900">Rush</span>
+          <nav className="flex items-center gap-4">
+            <Link href="/clubs" className="text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors">
+              Browse clubs
+            </Link>
+            <Link
+              href="/auth"
+              className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+            >
+              Sign in
+            </Link>
+          </nav>
+        </div>
+      </header>
+
+      {/* Hero */}
+      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-6 py-20 sm:px-10 lg:px-12">
+        <section className="max-w-2xl space-y-6">
+          <p className="text-xs font-medium text-slate-500">
+            University of Michigan · 1,800+ student organizations
           </p>
-          <h1 className="max-w-3xl text-5xl font-semibold tracking-tight text-balance sm:text-6xl">
-            Club discovery and recruiting infrastructure for campus teams.
+          <h1 className="text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
+            Find your club.
           </h1>
-          <p className="max-w-2xl text-lg leading-8 text-stone-300">
-            The first build focuses on searchable club pages, application
-            tracking, and recruiter workflows. Recommendations come later, once
-            the product has real usage data.
+          <p className="max-w-xl text-lg leading-relaxed text-slate-600">
+            Browse every student org at Michigan, track your applications, and
+            never miss a recruiting deadline.
           </p>
-        </div>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Link
+              href="/clubs"
+              className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+            >
+              Browse clubs →
+            </Link>
+            <Link
+              href="/auth"
+              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+            >
+              Sign in
+            </Link>
+          </div>
+        </section>
 
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <Link
-            href="/auth"
-            className="inline-flex min-h-12 items-center justify-center rounded-full bg-amber-300 px-6 py-3 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
-          >
-            Sign in
-          </Link>
-          <Link
-            href="/dashboard"
-            className="inline-flex min-h-12 items-center justify-center rounded-full border border-stone-700 px-6 py-3 text-sm font-semibold text-stone-100 transition hover:border-stone-500 hover:bg-stone-800/60"
-          >
-            Open dashboard
-          </Link>
-        </div>
+        {/* Stats bar */}
+        <section className="mt-20 grid gap-4 sm:grid-cols-3">
+          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+            <p className="text-2xl font-bold text-slate-900">1,800+</p>
+            <p className="mt-1 text-sm text-slate-500">clubs on campus</p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+            <p className="text-2xl font-bold text-slate-900">All categories</p>
+            <p className="mt-1 text-sm text-slate-500">academic, cultural, pre-professional</p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+            <p className="text-2xl font-bold text-slate-900">Free</p>
+            <p className="mt-1 text-sm text-slate-500">for Michigan students</p>
+          </div>
+        </section>
+      </main>
 
-        <div className="grid gap-4 sm:grid-cols-3">
-          <article className="rounded-2xl border border-stone-800 bg-stone-900/70 p-6">
-            <h2 className="text-lg font-semibold text-stone-100">Students</h2>
-            <p className="mt-2 text-sm leading-7 text-stone-400">
-              Discover clubs, follow deadlines, and manage application progress
-              in one place.
-            </p>
-          </article>
-          <article className="rounded-2xl border border-stone-800 bg-stone-900/70 p-6">
-            <h2 className="text-lg font-semibold text-stone-100">Clubs</h2>
-            <p className="mt-2 text-sm leading-7 text-stone-400">
-              Claim your page, review applicants, and move candidates through a
-              shared pipeline.
-            </p>
-          </article>
-          <article className="rounded-2xl border border-stone-800 bg-stone-900/70 p-6">
-            <h2 className="text-lg font-semibold text-stone-100">Platform</h2>
-            <p className="mt-2 text-sm leading-7 text-stone-400">
-              Built with Next.js and Supabase first, with ML layered in only
-              after the product proves demand.
-            </p>
-          </article>
-        </div>
-      </section>
-    </main>
+      {/* Footer */}
+      <footer className="border-t border-slate-200 bg-white px-6 py-4 sm:px-10 lg:px-12">
+        <p className="text-xs text-slate-400">Rush · University of Michigan</p>
+      </footer>
+    </div>
   );
 }
