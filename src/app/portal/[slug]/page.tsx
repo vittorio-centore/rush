@@ -1,35 +1,50 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
 
-import { createClient } from "@/lib/supabase/server";
+import { getPortalContext } from "@/lib/portal";
 
-type ApplicationStatus = "interested" | "applied" | "interview" | "decision";
-type DecisionStatus = "pending" | "accepted" | "rejected" | "waitlisted";
+import { bulkUpdateApplicants } from "./actions";
 
-interface Profile {
-  full_name: string | null;
-  email: string | null;
-  year: string | null;
-  major: string | null;
-}
-
-interface Application {
+type Application = {
   id: string;
-  status: ApplicationStatus;
-  decision_status: DecisionStatus | null;
+  status: "interested" | "applied" | "interview" | "decision";
+  decision_status: "pending" | "accepted" | "rejected" | "waitlisted" | null;
   applied_at: string | null;
   created_at: string;
-  profiles: Profile | Profile[] | null;
-}
+  application_source: "tracked" | "native" | "external_csv";
+  external_full_name: string | null;
+  external_email: string | null;
+  external_year: string | null;
+  external_major: string | null;
+  profiles:
+    | {
+        full_name: string | null;
+        email: string | null;
+        year: string | null;
+        major: string | null;
+      }
+    | {
+        full_name: string | null;
+        email: string | null;
+        year: string | null;
+        major: string | null;
+      }[]
+    | null;
+};
 
-const STATUS_LABELS: Record<ApplicationStatus, string> = {
+type ReviewAggregate = {
+  application_id: string;
+  average: number | null;
+  count: number;
+};
+
+const STATUS_LABELS = {
   interested: "Interested",
   applied: "Applied",
   interview: "Interview",
   decision: "Decision",
-};
+} as const;
 
-const STATUS_BADGE: Record<ApplicationStatus, string> = {
+const STATUS_BADGE = {
   interested:
     "inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-400/20",
   applied:
@@ -38,33 +53,42 @@ const STATUS_BADGE: Record<ApplicationStatus, string> = {
     "inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20",
   decision:
     "inline-flex items-center rounded-md bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20",
-};
+} as const;
 
-const DECISION_BADGE: Record<DecisionStatus, string> = {
-  pending:
-    "inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-400/20",
-  accepted:
-    "inline-flex items-center rounded-md bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20",
-  rejected:
-    "inline-flex items-center rounded-md bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600 ring-1 ring-inset ring-red-500/20",
-  waitlisted:
-    "inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-400/20",
-};
+function getProfile(application: Application) {
+  if (!application.profiles) {
+    return null;
+  }
 
-const ALL_STATUSES: ApplicationStatus[] = [
-  "interested",
-  "applied",
-  "interview",
-  "decision",
-];
-
-function getProfile(app: Application): Profile | null {
-  if (!app.profiles) return null;
-  return Array.isArray(app.profiles) ? (app.profiles[0] ?? null) : app.profiles;
+  return Array.isArray(application.profiles)
+    ? application.profiles[0] ?? null
+    : application.profiles;
 }
 
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return "—";
+function applicantField(application: Application, key: "full_name" | "email" | "year" | "major") {
+  const profile = getProfile(application);
+
+  if (profile?.[key]) {
+    return profile[key];
+  }
+
+  const externalKey =
+    key === "full_name"
+      ? "external_full_name"
+      : key === "email"
+        ? "external_email"
+        : key === "year"
+          ? "external_year"
+          : "external_major";
+
+  return application[externalKey];
+}
+
+function formatDate(dateStr: string | null) {
+  if (!dateStr) {
+    return "—";
+  }
+
   return new Date(dateStr).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -72,218 +96,346 @@ function formatDate(dateStr: string | null): string {
   });
 }
 
+function averageScore(values: number[]) {
+  if (values.length === 0) {
+    return null;
+  }
+
+  return Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10;
+}
+
 export default async function PortalPage({
   params,
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{
+    status?: string;
+    decision?: string;
+    q?: string;
+    year?: string;
+    major?: string;
+    message?: string;
+    error?: string;
+  }>;
 }) {
   const { slug } = await params;
-  const { status: statusFilter } = await searchParams;
+  const { supabase, club, membership, user } = await getPortalContext(slug);
+  const { status, decision, q, year, major, message, error } = await searchParams;
 
-  const supabase = await createClient();
-  const { data: authData } = await supabase.auth.getUser();
+  const { data: reviewerAssignments } = membership.role === "reviewer"
+    ? await supabase
+        .from("club_reviewer_assignments")
+        .select("application_id")
+        .eq("reviewer_user_id", user.id)
+        .eq("club_id", club.id)
+    : { data: [] };
 
-  if (!authData.user) {
-    redirect("/auth");
-  }
-
-  // Fetch club by slug
-  const { data: club } = await supabase
-    .from("clubs")
-    .select("id, name, category")
-    .eq("slug", slug)
-    .single();
-
-  if (!club) {
-    notFound();
-  }
-
-  // Check admin membership
-  const { data: membership } = await supabase
-    .from("club_admin_memberships")
-    .select("id, role")
-    .eq("club_id", club.id)
-    .eq("user_id", authData.user.id)
-    .maybeSingle();
-
-  if (!membership) {
-    notFound();
-  }
-
-  // Fetch applicants
   let query = supabase
     .from("user_applications")
     .select(
-      "id, status, decision_status, applied_at, created_at, profiles(full_name, email, year, major)",
+      "id, status, decision_status, applied_at, created_at, application_source, external_full_name, external_email, external_year, external_major, profiles(full_name, email, year, major)",
     )
     .eq("club_id", club.id)
     .order("created_at", { ascending: false });
 
-  const validStatuses: ApplicationStatus[] = [
-    "interested",
-    "applied",
-    "interview",
-    "decision",
-  ];
-  const activeFilter =
-    statusFilter && validStatuses.includes(statusFilter as ApplicationStatus)
-      ? (statusFilter as ApplicationStatus)
-      : null;
-
-  if (activeFilter) {
-    query = query.eq("status", activeFilter);
+  if (membership.role === "reviewer") {
+    const assignedIds = (reviewerAssignments ?? []).map((assignment) => assignment.application_id);
+    if (assignedIds.length === 0) {
+      query = query.in("id", ["00000000-0000-0000-0000-000000000000"]);
+    } else {
+      query = query.in("id", assignedIds);
+    }
   }
 
-  const { data: applications } = await query;
-  const apps = (applications ?? []) as Application[];
+  const { data } = await query;
+  const allApplications = (data ?? []) as Application[];
+
+  const { data: reviewRows } = allApplications.length
+    ? await supabase
+        .from("club_application_reviews")
+        .select(
+          "application_id, problem_solving, coding_ability, technical_knowledge, communication",
+        )
+        .in("application_id", allApplications.map((application) => application.id))
+    : { data: [] };
+
+  const reviewMap = new Map<string, number[]>();
+  for (const review of reviewRows ?? []) {
+    const current = reviewMap.get(review.application_id) ?? [];
+    current.push(
+      review.problem_solving,
+      review.coding_ability,
+      review.technical_knowledge,
+      review.communication,
+    );
+    reviewMap.set(review.application_id, current);
+  }
+
+  const reviewAggregates = new Map<string, ReviewAggregate>();
+  for (const application of allApplications) {
+    const scores = reviewMap.get(application.id) ?? [];
+    reviewAggregates.set(application.id, {
+      application_id: application.id,
+      average: averageScore(scores),
+      count: scores.length / 4,
+    });
+  }
+
+  const years = Array.from(
+    new Set(allApplications.map((application) => applicantField(application, "year")).filter(Boolean)),
+  ) as string[];
+  const majors = Array.from(
+    new Set(allApplications.map((application) => applicantField(application, "major")).filter(Boolean)),
+  ) as string[];
+
+  const filteredApplications = allApplications.filter((application) => {
+    const matchesStatus = !status || application.status === status;
+    const matchesDecision = !decision || application.decision_status === decision;
+    const matchesYear = !year || applicantField(application, "year") === year;
+    const matchesMajor = !major || applicantField(application, "major") === major;
+    const name = applicantField(application, "full_name") ?? "";
+    const email = applicantField(application, "email") ?? "";
+    const matchesQuery =
+      !q ||
+      name.toLowerCase().includes(q.toLowerCase()) ||
+      email.toLowerCase().includes(q.toLowerCase());
+
+    return matchesStatus && matchesDecision && matchesYear && matchesMajor && matchesQuery;
+  });
+
+  const counts = {
+    interested: allApplications.filter((application) => application.status === "interested").length,
+    applied: allApplications.filter((application) => application.status === "applied").length,
+    interview: allApplications.filter((application) => application.status === "interview").length,
+    decision: allApplications.filter((application) => application.status === "decision").length,
+  };
 
   return (
-    <main>
-      {/* Header */}
-      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <Link
-            href="/dashboard"
-            className="text-sm text-slate-500 hover:text-slate-900 transition-colors"
-          >
-            ← Dashboard
-          </Link>
-          <div className="mt-2 flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-slate-900">{club.name}</h1>
-            <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 capitalize">
-              {membership.role}
-            </span>
-          </div>
-          {club.category && (
-            <p className="mt-1 text-sm text-slate-600">{club.category}</p>
-          )}
+    <main className="flex flex-col gap-6">
+      {message ? (
+        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          {message}
         </div>
-      </div>
+      ) : null}
+      {error ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {error}
+        </div>
+      ) : null}
 
-      {/* Status filter pills */}
-      <div className="mb-6 flex flex-wrap gap-2">
-        <Link
-          href={`/portal/${slug}`}
-          className={
-            !activeFilter
-              ? "rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white"
-              : "rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-          }
-        >
-          All
-        </Link>
-        {ALL_STATUSES.map((s) => (
-          <Link
-            key={s}
-            href={`/portal/${slug}?status=${s}`}
-            className={
-              activeFilter === s
-                ? "rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white"
-                : "rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-            }
-          >
-            {STATUS_LABELS[s]}
-          </Link>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {Object.entries(counts).map(([key, count]) => (
+          <div key={key} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-xs uppercase tracking-[0.16em] text-slate-400">
+              {STATUS_LABELS[key as keyof typeof STATUS_LABELS]}
+            </p>
+            <p className="mt-2 text-3xl font-semibold text-slate-900">{count}</p>
+          </div>
         ))}
       </div>
 
-      {/* Applicant list */}
-      {apps.length === 0 ? (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <p className="py-12 text-center text-sm text-slate-400">
-            {activeFilter
-              ? `No applicants with status "${STATUS_LABELS[activeFilter]}".`
-              : "No applicants yet."}
-          </p>
-        </div>
-      ) : (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          {/* Table */}
-          <table className="w-full">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="text-xs font-medium text-slate-500 uppercase tracking-wide px-4 py-3 text-left">
-                  Name
-                </th>
-                <th className="text-xs font-medium text-slate-500 uppercase tracking-wide px-4 py-3 text-left">
-                  Email
-                </th>
-                <th className="text-xs font-medium text-slate-500 uppercase tracking-wide px-4 py-3 text-left">
-                  Year / Major
-                </th>
-                <th className="text-xs font-medium text-slate-500 uppercase tracking-wide px-4 py-3 text-left">
-                  Status
-                </th>
-                <th className="text-xs font-medium text-slate-500 uppercase tracking-wide px-4 py-3 text-left">
-                  Decision
-                </th>
-                <th className="text-xs font-medium text-slate-500 uppercase tracking-wide px-4 py-3 text-left">
-                  Applied
-                </th>
-                <th className="sr-only px-4 py-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {apps.map((app) => {
-                const profile = getProfile(app);
-                return (
-                  <tr
-                    key={app.id}
-                    className="border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors"
-                  >
-                    <td className="px-4 py-3">
-                      <span className="text-sm font-medium text-slate-900">
-                        {profile?.full_name ?? "—"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-sm text-slate-500">
-                        {profile?.email ?? "—"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-xs text-slate-400">
-                        {[profile?.year, profile?.major]
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <form className="grid gap-4 lg:grid-cols-[1.4fr_repeat(4,minmax(0,1fr))]">
+          <input
+            name="q"
+            defaultValue={q ?? ""}
+            placeholder="Search by name or email"
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          />
+          <select
+            name="status"
+            defaultValue={status ?? ""}
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="">All statuses</option>
+            {Object.entries(STATUS_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <select
+            name="decision"
+            defaultValue={decision ?? ""}
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="">All decisions</option>
+            <option value="pending">Pending</option>
+            <option value="accepted">Accepted</option>
+            <option value="rejected">Rejected</option>
+            <option value="waitlisted">Waitlisted</option>
+          </select>
+          <select
+            name="year"
+            defaultValue={year ?? ""}
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="">All years</option>
+            {years.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+          <select
+            name="major"
+            defaultValue={major ?? ""}
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          >
+            <option value="">All majors</option>
+            {majors.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+          <button
+            type="submit"
+            className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800"
+          >
+            Apply filters
+          </button>
+        </form>
+      </div>
+
+      <form className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        {membership.role === "admin" ? (
+          <div className="flex flex-col gap-4 border-b border-slate-100 p-4 lg:flex-row lg:items-center">
+            <div className="flex flex-1 flex-col gap-3 sm:flex-row">
+              <select
+                name="status"
+                defaultValue=""
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="">No status change</option>
+                {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <select
+                name="decision_status"
+                defaultValue=""
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="">No decision change</option>
+                <option value="pending">Pending</option>
+                <option value="accepted">Accepted</option>
+                <option value="rejected">Rejected</option>
+                <option value="waitlisted">Waitlisted</option>
+              </select>
+            </div>
+            <button
+              formAction={bulkUpdateApplicants.bind(null, slug)}
+              className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+            >
+              Bulk update selected
+            </button>
+          </div>
+        ) : null}
+
+        {filteredApplications.length === 0 ? (
+          <div className="px-6 py-12 text-center text-sm text-slate-400">
+            No applicants match the current filters.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50">
+                  {membership.role === "admin" ? (
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Select
+                    </th>
+                  ) : null}
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Applicant
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Year / Major
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Status
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Score
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Source
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Applied
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Review
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredApplications.map((application) => {
+                  const aggregate = reviewAggregates.get(application.id);
+                  return (
+                    <tr key={application.id} className="border-b border-slate-100 last:border-0">
+                      {membership.role === "admin" ? (
+                        <td className="px-4 py-3">
+                          <input name="application_ids" type="checkbox" value={application.id} />
+                        </td>
+                      ) : null}
+                      <td className="px-4 py-3">
+                        <div>
+                          <p className="text-sm font-medium text-slate-900">
+                            {applicantField(application, "full_name") ?? "Unknown applicant"}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {applicantField(application, "email") ?? "—"}
+                          </p>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600">
+                        {[applicantField(application, "year"), applicantField(application, "major")]
                           .filter(Boolean)
                           .join(" · ") || "—"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={STATUS_BADGE[app.status]}>
-                        {STATUS_LABELS[app.status]}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {app.decision_status ? (
-                        <span className={DECISION_BADGE[app.decision_status]}>
-                          {app.decision_status}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-slate-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-sm text-slate-500">
-                        {formatDate(app.applied_at ?? app.created_at)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/portal/${slug}/applicants/${app.id}`}
-                        className="text-xs font-medium text-blue-600 hover:text-blue-700"
-                      >
-                        Review →
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col gap-1">
+                          <span className={STATUS_BADGE[application.status]}>
+                            {STATUS_LABELS[application.status]}
+                          </span>
+                          <span className="text-xs capitalize text-slate-500">
+                            {application.decision_status ?? "pending"}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600">
+                        {aggregate?.average ? `${aggregate.average}/10` : "—"}
+                        {aggregate?.count ? (
+                          <span className="ml-1 text-xs text-slate-400">({aggregate.count})</span>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600">
+                        {application.application_source}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600">
+                        {formatDate(application.applied_at ?? application.created_at)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Link
+                          href={`/portal/${slug}/applicants/${application.id}`}
+                          className="text-sm font-medium text-blue-600 transition-colors hover:text-blue-700"
+                        >
+                          Open →
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </form>
     </main>
   );
 }

@@ -7,6 +7,7 @@ import FollowButton from "./FollowButton";
 
 type Props = {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<{ message?: string; error?: string }>;
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -58,8 +59,10 @@ function daysUntil(dateStr: string): number {
   return Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-export default async function ClubPage({ params }: Props) {
+export default async function ClubPage({ params, searchParams }: Props) {
   const { slug } = await params;
+  const resolvedSearchParams = (await searchParams) ?? {};
+  const { message, error } = resolvedSearchParams;
   const supabase = await createClient();
 
   const { data: club } = await supabase
@@ -104,6 +107,9 @@ export default async function ClubPage({ params }: Props) {
   }
 
   const allDeadlines = activeDeadlines ?? [];
+  const isNativeApplication = club.application_mode === "native";
+  const applyHref = isNativeApplication ? `/clubs/${club.slug}/apply` : club.application_url;
+  const applyLabel = isNativeApplication ? "Apply on Rush" : "Apply externally";
 
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-12 sm:px-10 lg:px-12">
@@ -114,6 +120,17 @@ export default async function ClubPage({ params }: Props) {
       >
         ← Club directory
       </Link>
+
+      {message ? (
+        <div className="mb-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          {message}
+        </div>
+      ) : null}
+      {error ? (
+        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {error}
+        </div>
+      ) : null}
 
       <div className="grid gap-8 lg:grid-cols-3">
         {/* Main content */}
@@ -146,6 +163,9 @@ export default async function ClubPage({ params }: Props) {
                   className={STATUS_BADGE[club.recruiting_status as string] ?? STATUS_BADGE.unknown}
                 >
                   {STATUS_LABELS[club.recruiting_status] ?? club.recruiting_status}
+                </span>
+                <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-300/60">
+                  {APP_MODE_LABELS[club.application_mode] ?? "Application info unavailable"}
                 </span>
                 {user ? (
                   <FollowButton clubId={club.id} isFollowing={isFollowing} />
@@ -182,7 +202,7 @@ export default async function ClubPage({ params }: Props) {
           </div>
 
           {/* Links */}
-          {(club.website_url || club.instagram_url || club.application_url) && (
+          {(club.website_url || club.instagram_url || applyHref) && (
             <div className="rounded-xl border border-slate-200 bg-white p-5">
               <h2 className="text-xs font-medium text-slate-500 mb-3">
                 Links
@@ -208,16 +228,23 @@ export default async function ClubPage({ params }: Props) {
                     Instagram ↗
                   </a>
                 )}
-                {club.application_url && (
+                {applyHref && (isNativeApplication ? (
+                  <Link
+                    href={applyHref}
+                    className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+                  >
+                    {applyLabel} →
+                  </Link>
+                ) : (
                   <a
-                    href={club.application_url}
+                    href={applyHref}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
                   >
-                    Apply ↗
+                    {applyLabel} ↗
                   </a>
-                )}
+                ))}
               </div>
               {club.application_mode && club.application_mode !== "none" && (
                 <p className="mt-3 text-xs text-slate-500">

@@ -1,178 +1,545 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 
-import { createClient } from "@/lib/supabase/server";
+import { getPortalContext } from "@/lib/portal";
 
-import { updateApplicantStatus } from "./actions";
+import {
+  assignReviewer,
+  saveReviewerScorecard,
+  unassignReviewer,
+  updateApplicantStatus,
+} from "./actions";
 
-type ApplicationStatus = "interested" | "applied" | "interview" | "decision";
-type DecisionStatus = "pending" | "accepted" | "rejected" | "waitlisted";
-
-interface Profile {
-  full_name: string | null;
-  email: string | null;
-  year: string | null;
-  major: string | null;
-}
-
-interface Application {
+type Application = {
   id: string;
-  status: ApplicationStatus;
-  decision_status: DecisionStatus | null;
+  status: "interested" | "applied" | "interview" | "decision";
+  decision_status: "pending" | "accepted" | "rejected" | "waitlisted" | null;
   notes: string | null;
   applied_at: string | null;
   created_at: string;
   updated_at: string;
-  profiles: Profile | Profile[] | null;
+  application_source: "tracked" | "native" | "external_csv";
+  external_full_name: string | null;
+  external_email: string | null;
+  external_year: string | null;
+  external_major: string | null;
+  profiles:
+    | {
+        full_name: string | null;
+        email: string | null;
+        year: string | null;
+        major: string | null;
+      }
+    | {
+        full_name: string | null;
+        email: string | null;
+        year: string | null;
+        major: string | null;
+      }[]
+    | null;
+};
+
+type Assignment = {
+  id: string;
+  reviewer_user_id: string;
+  reviewer_profile: {
+    full_name: string | null;
+    email: string | null;
+  } | null;
+};
+
+type Review = {
+  reviewer_user_id: string;
+  problem_solving: number;
+  coding_ability: number;
+  technical_knowledge: number;
+  communication: number;
+  notes: string | null;
+};
+
+type SubmissionAnswer = {
+  answer_text: string | null;
+  answer_values: string[] | null;
+  club_application_form_questions: {
+    label: string;
+    type: string;
+  } | {
+    label: string;
+    type: string;
+  }[] | null;
+};
+
+function getProfile(application: Application) {
+  if (!application.profiles) {
+    return null;
+  }
+
+  return Array.isArray(application.profiles)
+    ? application.profiles[0] ?? null
+    : application.profiles;
 }
 
-function getProfile(app: Application): Profile | null {
-  if (!app.profiles) return null;
-  return Array.isArray(app.profiles) ? (app.profiles[0] ?? null) : app.profiles;
+function getApplicantField(application: Application, key: "full_name" | "email" | "year" | "major") {
+  const profile = getProfile(application);
+
+  if (profile?.[key]) {
+    return profile[key];
+  }
+
+  const externalKey =
+    key === "full_name"
+      ? "external_full_name"
+      : key === "email"
+        ? "external_email"
+        : key === "year"
+          ? "external_year"
+          : "external_major";
+
+  return application[externalKey];
+}
+
+function getQuestionLabel(answer: SubmissionAnswer) {
+  if (!answer.club_application_form_questions) {
+    return "Question";
+  }
+
+  const question = Array.isArray(answer.club_application_form_questions)
+    ? answer.club_application_form_questions[0]
+    : answer.club_application_form_questions;
+
+  return question?.label ?? "Question";
+}
+
+function getAnswerDisplay(answer: SubmissionAnswer) {
+  if (Array.isArray(answer.answer_values) && answer.answer_values.length > 0) {
+    return answer.answer_values.join(", ");
+  }
+
+  return answer.answer_text || "—";
+}
+
+function average(values: number[]) {
+  if (values.length === 0) {
+    return null;
+  }
+
+  return Math.round((values.reduce((total, value) => total + value, 0) / values.length) * 10) / 10;
 }
 
 export default async function ApplicantPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string; applicationId: string }>;
+  searchParams: Promise<{ message?: string; error?: string }>;
 }) {
   const { slug, applicationId } = await params;
+  const { message, error } = await searchParams;
+  const { supabase, club, membership, user } = await getPortalContext(slug);
 
-  const supabase = await createClient();
-  const { data: authData } = await supabase.auth.getUser();
-
-  if (!authData.user) {
-    redirect("/auth");
-  }
-
-  const { data: club } = await supabase
-    .from("clubs")
-    .select("id, name, category")
-    .eq("slug", slug)
-    .single();
-
-  if (!club) notFound();
-
-  const { data: membership } = await supabase
-    .from("club_admin_memberships")
-    .select("id, role")
-    .eq("club_id", club.id)
-    .eq("user_id", authData.user.id)
-    .maybeSingle();
-
-  if (!membership) notFound();
-
-  const { data: application } = await supabase
+  const { data: applicationData } = await supabase
     .from("user_applications")
-    .select("*, profiles(full_name, email, year, major)")
+    .select(
+      "id, status, decision_status, notes, applied_at, created_at, updated_at, application_source, external_full_name, external_email, external_year, external_major, profiles(full_name, email, year, major)",
+    )
     .eq("id", applicationId)
     .eq("club_id", club.id)
     .single();
 
-  if (!application) notFound();
+  if (!applicationData) {
+    notFound();
+  }
 
-  const app = application as Application;
-  const profile = getProfile(app);
+  const application = applicationData as Application;
+
+  const { data: assignmentsData } = await supabase
+    .from("club_reviewer_assignments")
+    .select("id, reviewer_user_id")
+    .eq("application_id", applicationId)
+    .order("created_at");
+
+  const assignmentsBase = assignmentsData ?? [];
+  const reviewerIds = assignmentsBase.map((assignment) => assignment.reviewer_user_id);
+  const { data: reviewerProfilesData } = reviewerIds.length
+    ? await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .in("id", reviewerIds)
+    : { data: [] };
+
+  const reviewerProfiles = new Map(
+    (reviewerProfilesData ?? []).map((profile) => [profile.id, profile]),
+  );
+
+  const assignments = assignmentsBase.map((assignment) => ({
+    ...assignment,
+    reviewer_profile: reviewerProfiles.get(assignment.reviewer_user_id) ?? null,
+  })) as Assignment[];
+
+  const { data: reviewsData } = await supabase
+    .from("club_application_reviews")
+    .select(
+      "reviewer_user_id, problem_solving, coding_ability, technical_knowledge, communication, notes",
+    )
+    .eq("application_id", applicationId);
+
+  const reviews = (reviewsData ?? []) as Review[];
+  const currentReview =
+    reviews.find((review) => review.reviewer_user_id === user.id) ?? null;
+  const isAssignedReviewer =
+    membership.role === "admin" ||
+    assignments.some((assignment) => assignment.reviewer_user_id === user.id);
+
+  const { data: submissionData } = await supabase
+    .from("club_application_submissions")
+    .select("id")
+    .eq("application_id", applicationId)
+    .maybeSingle();
+
+  const { data: answersData } = submissionData
+    ? await supabase
+        .from("club_application_submission_answers")
+        .select("answer_text, answer_values, club_application_form_questions(label, type)")
+        .eq("submission_id", submissionData.id)
+    : { data: [] };
+
+  const answers = (answersData ?? []) as SubmissionAnswer[];
+
+  const { data: reviewerOptionsData } = membership.role === "admin"
+    ? await supabase
+        .from("club_admin_memberships")
+        .select("user_id, role")
+        .eq("club_id", club.id)
+        .in("role", ["admin", "reviewer"])
+    : { data: [] };
+
+  const reviewerOptionIds = (reviewerOptionsData ?? []).map((member) => member.user_id);
+  const { data: reviewerOptionProfilesData } =
+    reviewerOptionIds.length > 0
+      ? await supabase
+          .from("profiles")
+          .select("id, full_name, email")
+          .in("id", reviewerOptionIds)
+      : { data: [] };
+
+  const reviewerOptionProfiles = new Map(
+    (reviewerOptionProfilesData ?? []).map((profile) => [profile.id, profile]),
+  );
+
+  const availableReviewers = (reviewerOptionsData ?? []).map((member) => ({
+    user_id: member.user_id,
+    role: member.role,
+    profile: reviewerOptionProfiles.get(member.user_id) ?? null,
+  }));
+
+  const applicantName = getApplicantField(application, "full_name") ?? "Unknown applicant";
+  const applicantEmail = getApplicantField(application, "email");
+  const applicantYear = getApplicantField(application, "year");
+  const applicantMajor = getApplicantField(application, "major");
+
+  const overallAverage = average(
+    reviews.flatMap((review) => [
+      review.problem_solving,
+      review.coding_ability,
+      review.technical_knowledge,
+      review.communication,
+    ]),
+  );
 
   return (
-    <main>
+    <main className="flex flex-col gap-6">
       <Link
         href={`/portal/${slug}`}
-        className="mb-6 inline-flex items-center text-sm text-slate-500 hover:text-slate-900 transition-colors"
+        className="text-sm text-slate-500 transition-colors hover:text-slate-900"
       >
-        ← All applicants
+        ← Back to applicants
       </Link>
 
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">
-          {profile?.full_name ?? "Unknown Applicant"}
-        </h1>
-        {profile?.email && (
-          <p className="mt-1 text-sm text-slate-500">{profile.email}</p>
-        )}
-      </div>
+      {message ? (
+        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          {message}
+        </div>
+      ) : null}
+      {error ? (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {error}
+        </div>
+      ) : null}
 
-      <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
-        {/* Applicant info */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-medium text-slate-500 mb-4">Applicant info</p>
-          <dl className="grid grid-cols-2 gap-4">
-            <div>
-              <dt className="text-xs text-slate-400">Full name</dt>
-              <dd className="mt-0.5 text-sm font-medium text-slate-900">{profile?.full_name ?? "—"}</dd>
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">{applicantName}</h2>
+            {applicantEmail ? (
+              <p className="mt-1 text-sm text-slate-500">{applicantEmail}</p>
+            ) : null}
+            <p className="mt-2 text-xs uppercase tracking-[0.16em] text-slate-400">
+              Source: {application.application_source}
+            </p>
+          </div>
+          {overallAverage ? (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Average score</p>
+              <p className="mt-1 text-2xl font-semibold text-slate-900">{overallAverage}/10</p>
             </div>
-            <div>
-              <dt className="text-xs text-slate-400">Email</dt>
-              <dd className="mt-0.5 text-sm font-medium text-slate-900 break-all">{profile?.email ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-slate-400">Year</dt>
-              <dd className="mt-0.5 text-sm font-medium text-slate-900">{profile?.year ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-slate-400">Major</dt>
-              <dd className="mt-0.5 text-sm font-medium text-slate-900">{profile?.major ?? "—"}</dd>
-            </div>
-          </dl>
+          ) : null}
         </div>
 
-        {/* Edit form */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-medium text-slate-500 mb-4">Update status</p>
-          <form className="flex flex-col gap-4">
-            <div>
-              <label htmlFor="status" className="block text-sm font-medium text-slate-700 mb-1">
-                Status
-              </label>
-              <select
-                id="status"
-                name="status"
-                defaultValue={app.status}
-                required
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="interested">Interested</option>
-                <option value="applied">Applied</option>
-                <option value="interview">Interview</option>
-                <option value="decision">Decision</option>
-              </select>
+        <dl className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <dt className="text-xs uppercase tracking-[0.16em] text-slate-400">Year</dt>
+            <dd className="mt-1 text-sm font-medium text-slate-900">{applicantYear ?? "—"}</dd>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <dt className="text-xs uppercase tracking-[0.16em] text-slate-400">Major</dt>
+            <dd className="mt-1 text-sm font-medium text-slate-900">{applicantMajor ?? "—"}</dd>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <dt className="text-xs uppercase tracking-[0.16em] text-slate-400">Status</dt>
+            <dd className="mt-1 text-sm font-medium text-slate-900">{application.status}</dd>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <dt className="text-xs uppercase tracking-[0.16em] text-slate-400">Decision</dt>
+            <dd className="mt-1 text-sm font-medium text-slate-900">
+              {application.decision_status ?? "pending"}
+            </dd>
+          </div>
+        </dl>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+        <div className="flex flex-col gap-6">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h3 className="text-lg font-semibold text-slate-900">Application answers</h3>
+            {answers.length === 0 ? (
+              <p className="mt-4 text-sm text-slate-400">
+                No native Rush form answers for this applicant.
+              </p>
+            ) : (
+              <div className="mt-4 flex flex-col gap-4">
+                {answers.map((answer, index) => (
+                  <div key={`${getQuestionLabel(answer)}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-sm font-medium text-slate-900">{getQuestionLabel(answer)}</p>
+                    <p className="mt-2 text-sm leading-7 text-slate-600">{getAnswerDisplay(answer)}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h3 className="text-lg font-semibold text-slate-900">Reviews</h3>
+            {reviews.length === 0 ? (
+              <p className="mt-4 text-sm text-slate-400">No scorecards submitted yet.</p>
+            ) : (
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                {reviews.map((review) => {
+                  const reviewer = reviewerProfiles.get(review.reviewer_user_id);
+                  return (
+                    <div key={review.reviewer_user_id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-sm font-semibold text-slate-900">
+                        {reviewer?.full_name || reviewer?.email || review.reviewer_user_id}
+                      </p>
+                      <dl className="mt-3 grid gap-2 text-sm text-slate-600">
+                        <div className="flex items-center justify-between">
+                          <dt>Problem solving</dt>
+                          <dd>{review.problem_solving}/10</dd>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <dt>Coding ability</dt>
+                          <dd>{review.coding_ability}/10</dd>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <dt>Technical knowledge</dt>
+                          <dd>{review.technical_knowledge}/10</dd>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <dt>Communication</dt>
+                          <dd>{review.communication}/10</dd>
+                        </div>
+                      </dl>
+                      {review.notes ? (
+                        <p className="mt-3 text-sm leading-6 text-slate-500">{review.notes}</p>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-6">
+          {membership.role === "admin" ? (
+            <>
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h3 className="text-lg font-semibold text-slate-900">Pipeline control</h3>
+                <form className="mt-4 flex flex-col gap-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">Status</label>
+                    <select
+                      name="status"
+                      defaultValue={application.status}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="interested">Interested</option>
+                      <option value="applied">Applied</option>
+                      <option value="interview">Interview</option>
+                      <option value="decision">Decision</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">Decision</label>
+                    <select
+                      name="decision_status"
+                      defaultValue={application.decision_status ?? "pending"}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="accepted">Accepted</option>
+                      <option value="rejected">Rejected</option>
+                      <option value="waitlisted">Waitlisted</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">Internal notes</label>
+                    <textarea
+                      name="notes"
+                      rows={4}
+                      defaultValue={application.notes ?? ""}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <button
+                    formAction={updateApplicantStatus.bind(null, slug, applicationId)}
+                    className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                  >
+                    Save applicant
+                  </button>
+                </form>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h3 className="text-lg font-semibold text-slate-900">Reviewer assignments</h3>
+                <form className="mt-4 flex flex-col gap-4 sm:flex-row">
+                  <select
+                    name="reviewer_user_id"
+                    defaultValue=""
+                    className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value="">Choose reviewer</option>
+                    {availableReviewers.map((reviewer) => (
+                      <option key={reviewer.user_id} value={reviewer.user_id}>
+                        {reviewer.profile?.full_name || reviewer.profile?.email || reviewer.user_id} ({reviewer.role})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    formAction={assignReviewer.bind(null, slug, applicationId)}
+                    className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                  >
+                    Assign
+                  </button>
+                </form>
+
+                <div className="mt-4 flex flex-col gap-3">
+                  {assignments.length === 0 ? (
+                    <p className="text-sm text-slate-400">No reviewers assigned yet.</p>
+                  ) : (
+                    assignments.map((assignment) => (
+                      <div key={assignment.id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <div>
+                          <p className="text-sm font-medium text-slate-900">
+                            {assignment.reviewer_profile?.full_name || assignment.reviewer_profile?.email || assignment.reviewer_user_id}
+                          </p>
+                          {assignment.reviewer_profile?.email ? (
+                            <p className="text-xs text-slate-500">{assignment.reviewer_profile.email}</p>
+                          ) : null}
+                        </div>
+                        <form>
+                          <button
+                            formAction={unassignReviewer.bind(null, slug, applicationId, assignment.id)}
+                            className="text-xs font-medium text-red-600 transition-colors hover:text-red-700"
+                          >
+                            Remove
+                          </button>
+                        </form>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </>
+          ) : null}
+
+          {isAssignedReviewer ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h3 className="text-lg font-semibold text-slate-900">Your review</h3>
+              <form className="mt-4 flex flex-col gap-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">Problem solving</label>
+                    <input
+                      name="problem_solving"
+                      type="number"
+                      min={1}
+                      max={10}
+                      defaultValue={currentReview?.problem_solving ?? 7}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">Coding ability</label>
+                    <input
+                      name="coding_ability"
+                      type="number"
+                      min={1}
+                      max={10}
+                      defaultValue={currentReview?.coding_ability ?? 7}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">Technical knowledge</label>
+                    <input
+                      name="technical_knowledge"
+                      type="number"
+                      min={1}
+                      max={10}
+                      defaultValue={currentReview?.technical_knowledge ?? 7}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">Communication</label>
+                    <input
+                      name="communication"
+                      type="number"
+                      min={1}
+                      max={10}
+                      defaultValue={currentReview?.communication ?? 7}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Review notes</label>
+                  <textarea
+                    name="review_notes"
+                    rows={5}
+                    defaultValue={currentReview?.notes ?? ""}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                  />
+                </div>
+                <button
+                  formAction={saveReviewerScorecard.bind(null, slug, applicationId)}
+                  className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800"
+                >
+                  Save review
+                </button>
+              </form>
             </div>
-            <div>
-              <label htmlFor="decision_status" className="block text-sm font-medium text-slate-700 mb-1">
-                Decision
-              </label>
-              <select
-                id="decision_status"
-                name="decision_status"
-                defaultValue={app.decision_status ?? "pending"}
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="pending">Pending</option>
-                <option value="accepted">Accepted</option>
-                <option value="rejected">Rejected</option>
-                <option value="waitlisted">Waitlisted</option>
-              </select>
-            </div>
-            <div>
-              <label htmlFor="notes" className="block text-sm font-medium text-slate-700 mb-1">
-                Notes
-              </label>
-              <textarea
-                id="notes"
-                name="notes"
-                rows={4}
-                defaultValue={app.notes ?? ""}
-                placeholder="Internal notes about this applicant…"
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none"
-              />
-            </div>
-            <button
-              formAction={updateApplicantStatus.bind(null, slug, applicationId)}
-              className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-            >
-              Save changes
-            </button>
-          </form>
+          ) : null}
         </div>
       </div>
     </main>
