@@ -155,6 +155,9 @@ export default async function PortalSettingsPage({
             <option value="external">External application</option>
             <option value="native">Native Rush application</option>
           </select>
+          <p className="mt-1 text-xs text-slate-400">
+            Use native mode if you want students to apply inside Rush. Use external mode if your club still collects applications elsewhere and plans to import applicants by CSV.
+          </p>
         </div>
 
         <div className="lg:col-span-2">
@@ -167,6 +170,9 @@ export default async function PortalSettingsPage({
             defaultValue={club.application_url ?? ""}
             className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           />
+          <p className="mt-1 text-xs text-slate-400">
+            Leave this blank for native Rush applications. Keep it filled in for clubs that use Google Forms or another external system.
+          </p>
         </div>
 
         <div className="lg:col-span-2">
