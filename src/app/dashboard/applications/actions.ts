@@ -42,6 +42,7 @@ export async function addApplication(formData: FormData) {
     user_id: data.user.id,
     club_id: clubId,
     event_type: "apply",
+    metadata: { source: "tracked" },
   });
 
   revalidatePath("/dashboard/applications");

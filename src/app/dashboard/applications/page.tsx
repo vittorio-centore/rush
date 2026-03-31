@@ -20,6 +20,8 @@ interface Application {
   status: ApplicationStatus;
   decision_status: DecisionStatus | null;
   created_at: string;
+  applied_at: string | null;
+  application_source: "tracked" | "native" | "external_csv";
   clubs: Club | Club[] | null;
 }
 
@@ -63,6 +65,18 @@ const COLUMN_HEADING: Record<ApplicationStatus, string> = {
   decision: "Decision",
 };
 
+const SOURCE_BADGE: Record<Application["application_source"], string> = {
+  tracked: "rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-600",
+  native: "rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-700",
+  external_csv: "rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs text-amber-700",
+};
+
+const SOURCE_LABEL: Record<Application["application_source"], string> = {
+  tracked: "Tracker only",
+  native: "Submitted in Rush",
+  external_csv: "Imported by club",
+};
+
 export default async function ApplicationsPage({
   searchParams,
 }: {
@@ -79,7 +93,7 @@ export default async function ApplicationsPage({
 
   const { data: applications } = await supabase
     .from("user_applications")
-    .select("id, status, decision_status, created_at, clubs(id, slug, name, category)")
+    .select("id, status, decision_status, created_at, applied_at, application_source, clubs(id, slug, name, category)")
     .eq("user_id", authData.user.id)
     .order("created_at", { ascending: false });
 
@@ -207,12 +221,26 @@ export default async function ApplicationsPage({
                         <span className={STATUS_BADGE[status]}>
                           {STATUS_LABELS[status]}
                         </span>
+                        <span className={SOURCE_BADGE[app.application_source]}>
+                          {SOURCE_LABEL[app.application_source]}
+                        </span>
                         {status === "decision" && app.decision_status && (
                           <span className={`capitalize ${DECISION_BADGE[app.decision_status]}`}>
                             {app.decision_status}
                           </span>
                         )}
                       </div>
+
+                      {app.applied_at ? (
+                        <p className="text-xs text-slate-400">
+                          Submitted{" "}
+                          {new Date(app.applied_at).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          })}
+                        </p>
+                      ) : null}
 
                       <div className="flex items-center gap-3 border-t border-slate-100 pt-3">
                         <Link

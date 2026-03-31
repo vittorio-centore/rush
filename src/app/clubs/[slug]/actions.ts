@@ -39,6 +39,12 @@ export async function unfollowClub(clubId: string) {
     .eq("user_id", data.user.id)
     .eq("club_id", clubId);
 
+  await supabase.from("events").insert({
+    user_id: data.user.id,
+    club_id: clubId,
+    event_type: "unfollow",
+  });
+
   revalidatePath("/clubs/[slug]", "page");
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/follows");

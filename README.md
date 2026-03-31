@@ -1,18 +1,24 @@
 # Rush
 
-Rush is a campus recruiting platform for club discovery, deadline tracking, and
-application workflow management.
+Rush is a campus recruiting platform for University of Michigan club discovery,
+deadline tracking, student application management, and club-side recruiting
+workflows. The product is intentionally being finished as a real pre-ML beta
+before recommendation infrastructure is added.
 
 ## Stack
 
-- Next.js
+- Next.js App Router
 - TypeScript
 - Tailwind CSS
-- pnpm
+- Supabase Auth + Postgres
+- Resend for email reminders
 
-## Development
+## Local Setup
 
-Install dependencies and start the development server:
+1. Copy the environment template and fill in real values from Supabase and Resend.
+2. Install dependencies.
+3. Apply the SQL migrations in [`supabase/migrations`](/Users/vittorioc/rush/supabase/migrations).
+4. Start the app.
 
 ```bash
 cp .env.example .env.local
@@ -22,15 +28,87 @@ pnpm dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-Set the values in `.env.local` from your Supabase project before using auth or
-database features.
+## Required Environment Variables
 
-## Current Scope
+```bash
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+NEXT_PUBLIC_APP_URL=
+CRON_SECRET=
+RESEND_API_KEY=
+```
 
-The initial build order is product-first:
+Notes:
+- `SUPABASE_SERVICE_ROLE_KEY` is required for the deadline reminder cron and Maize Pages seed script.
+- `NEXT_PUBLIC_APP_URL` is used in reminder email links.
+- `CRON_SECRET` protects the reminder endpoint.
+- `RESEND_API_KEY` is only required if you want reminder delivery to work.
 
-1. Club directory and SEO-friendly club pages
-2. Student dashboard and application tracker
-3. Club claim flow and recruiter portal
-4. Notifications and operational tooling
-5. Recommendation system after enough usage data exists
+## Supabase Setup
+
+Apply the migrations in order from [`supabase/migrations`](/Users/vittorioc/rush/supabase/migrations). If you are not using the Supabase CLI yet, run them in the SQL editor in timestamp order.
+
+Auth settings to configure in the dashboard:
+- Enable Email auth.
+- Set `Site URL` to `http://localhost:3000` for local development.
+- Add `http://localhost:3000/**` as a redirect URL.
+- Update the confirm-signup email template URL to:
+
+```text
+{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email
+```
+
+## Seed Club Data
+
+Bootstrap the public directory from Maize Pages:
+
+```bash
+pnpm seed-clubs
+```
+
+This script:
+- fetches public Maize Pages organizations
+- normalizes them into the Rush `clubs` schema
+- upserts by `slug`
+
+The seed script requires `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in `.env.local`.
+
+## Reminder Cron
+
+The reminder endpoint is:
+
+```text
+POST /api/cron/deadline-reminders
+Authorization: Bearer <CRON_SECRET>
+```
+
+Example local invocation:
+
+```bash
+curl -X POST http://localhost:3000/api/cron/deadline-reminders \
+  -H "Authorization: Bearer $CRON_SECRET"
+```
+
+The route uses the service-role client and sends emails through Resend.
+
+## Current Beta Scope
+
+Implemented product areas:
+- public club directory and SEO-friendly club pages
+- student auth, profile, follows, deadlines, and application tracker
+- club claim requests with manual approval ops
+- recruiter portal for applicant review, settings, deadlines, native forms, and CSV imports
+- native Rush applications and mixed external application intake
+- deadline reminder cron and event logging
+
+Still intentionally deferred:
+- embeddings, pgvector, ranking models, and FastAPI recommendation serving
+
+## Operations
+
+See the operator runbook in [`docs/operator-runbook.md`](/Users/vittorioc/rush/docs/operator-runbook.md) for:
+- migration/application workflow
+- Maize Pages seeding
+- manual claim approval
+- reminder cron deployment secrets

@@ -195,9 +195,12 @@ export default async function DashboardPage() {
                   >
                     <div className="flex-1 min-w-0">
                       {clubData && (
-                        <span className="text-sm font-medium text-slate-900 mr-2">
+                        <Link
+                          href={`/clubs/${clubData.slug}`}
+                          className="mr-2 text-sm font-medium text-slate-900 transition-colors hover:text-blue-600"
+                        >
                           {clubData.name}
-                        </span>
+                        </Link>
                       )}
                       <span className="text-sm text-slate-500">{d.title}</span>
                     </div>
@@ -207,11 +210,15 @@ export default async function DashboardPage() {
                         day: "numeric",
                       })}
                     </span>
-                    {isUrgent && (
-                      <span className="inline-flex items-center rounded-md bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600 ring-1 ring-inset ring-red-500/20 shrink-0">
-                        {relativeDate(d.deadline_at)}
-                      </span>
-                    )}
+                    <span
+                      className={
+                        isUrgent
+                          ? "inline-flex items-center rounded-md bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600 ring-1 ring-inset ring-red-500/20 shrink-0"
+                          : "inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-300/60 shrink-0"
+                      }
+                    >
+                      {relativeDate(d.deadline_at)}
+                    </span>
                   </li>
                 );
               })}

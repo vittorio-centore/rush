@@ -1,0 +1,101 @@
+# Rush Operator Runbook
+
+This runbook covers the minimum operational tasks needed to run the pre-ML Rush beta.
+
+## 1. Apply Migrations
+
+Rush stores the authoritative schema in [`supabase/migrations`](/Users/vittorioc/rush/supabase/migrations).
+
+Recommended process:
+1. Apply each SQL file in timestamp order.
+2. Confirm the tables, policies, triggers, and functions were created successfully.
+3. Re-run on a clean Supabase project before cutting a beta release.
+
+If you are not using the Supabase CLI yet, the SQL editor is acceptable for now.
+
+## 2. Seed Initial Club Data
+
+Run:
+
+```bash
+pnpm seed-clubs
+```
+
+Required env vars in `.env.local`:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+```
+
+What the script does:
+- fetches public organizations from Maize Pages
+- filters to public + active orgs
+- maps them into the `clubs` table
+- upserts by `slug`
+
+The seed is safe to rerun.
+
+## 3. Approve Club Claims Manually
+
+Rush intentionally keeps claim approval out of the app before ML. Approval is done through the SQL function defined in [`20260328_approve_claim_fn.sql`](/Users/vittorioc/rush/supabase/migrations/20260328_approve_claim_fn.sql).
+
+Find pending claims:
+
+```sql
+select id, club_id, user_id, submitted_at
+from public.club_claims
+where status = 'pending'
+order by submitted_at asc;
+```
+
+Approve a claim:
+
+```sql
+select public.approve_claim('<claim-id>', '<admin-user-id>');
+```
+
+What approval does:
+- marks the claim as `approved`
+- sets `reviewed_by`
+- creates an `admin` membership in `club_admin_memberships`
+
+## 4. Configure Reminder Cron Secrets
+
+Required runtime secrets:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+NEXT_PUBLIC_APP_URL=
+CRON_SECRET=
+RESEND_API_KEY=
+```
+
+The reminder route is:
+
+```text
+POST /api/cron/deadline-reminders
+```
+
+The request must send:
+
+```text
+Authorization: Bearer <CRON_SECRET>
+```
+
+Recommended deployment setup:
+- store all secrets in Vercel project environment variables
+- schedule the cron in Vercel to hit the route daily
+- verify Resend sender/domain configuration before enabling production reminders
+
+## 5. Smoke Checklist Before Beta
+
+- `pnpm lint`
+- `pnpm build`
+- sign up, confirm email, sign in, sign out
+- directory pages render with seeded club data
+- follows update dashboard deadlines
+- native application submit succeeds
+- recruiter portal settings/forms/imports load for an approved admin
+- reminder cron returns a success payload with valid secrets
