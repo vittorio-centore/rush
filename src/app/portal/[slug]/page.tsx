@@ -55,6 +55,12 @@ const STATUS_BADGE = {
     "inline-flex items-center rounded-md bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20",
 } as const;
 
+const SOURCE_LABELS = {
+  tracked: "Tracker only",
+  native: "Rush native",
+  external_csv: "CSV import",
+} as const;
+
 function getProfile(application: Application) {
   if (!application.profiles) {
     return null;
@@ -415,7 +421,7 @@ export default async function PortalPage({
                         ) : null}
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-600">
-                        {application.application_source}
+                        {SOURCE_LABELS[application.application_source]}
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-600">
                         {formatDate(application.applied_at ?? application.created_at)}

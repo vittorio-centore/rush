@@ -69,6 +69,12 @@ type SubmissionAnswer = {
   }[] | null;
 };
 
+const SOURCE_LABELS = {
+  tracked: "Tracker only",
+  native: "Rush native",
+  external_csv: "CSV import",
+} as const;
+
 function getProfile(application: Application) {
   if (!application.profiles) {
     return null;
@@ -274,7 +280,7 @@ export default async function ApplicantPage({
               <p className="mt-1 text-sm text-slate-500">{applicantEmail}</p>
             ) : null}
             <p className="mt-2 text-xs uppercase tracking-[0.16em] text-slate-400">
-              Source: {application.application_source}
+              Source: {SOURCE_LABELS[application.application_source]}
             </p>
           </div>
           {overallAverage ? (

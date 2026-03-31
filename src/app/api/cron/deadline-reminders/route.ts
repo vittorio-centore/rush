@@ -1,3 +1,5 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import { createServiceClient } from "@/lib/supabase/service";
 import { sendDeadlineReminder, type DeadlineItem } from "@/lib/email";
 
@@ -65,8 +67,31 @@ async function processFlatRows(rows: RpcRow[]): Promise<Response> {
   return Response.json({ sent, failed });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function sendViaManualJoin(supabase: any): Promise<Response> {
+type DeadlineRow = {
+  id: string;
+  title: string;
+  deadline_at: string;
+  club_id: string;
+};
+
+type ClubRow = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
+type FollowRow = {
+  user_id: string;
+  club_id: string;
+};
+
+type ProfileRow = {
+  id: string;
+  email: string;
+  full_name: string | null;
+};
+
+async function sendViaManualJoin(supabase: SupabaseClient): Promise<Response> {
   // Step 1: get all active deadlines in the next 14 days
   const { data: deadlines } = await supabase
     .from("club_deadlines")
@@ -80,7 +105,8 @@ async function sendViaManualJoin(supabase: any): Promise<Response> {
     return Response.json({ sent: 0, failed: 0 });
   }
 
-  const clubIds = [...new Set(deadlines.map((d: { club_id: string }) => d.club_id))] as string[];
+  const typedDeadlines = deadlines as DeadlineRow[];
+  const clubIds = [...new Set(typedDeadlines.map((deadline) => deadline.club_id))];
 
   // Step 2: get clubs
   const { data: clubs } = await supabase
@@ -88,7 +114,15 @@ async function sendViaManualJoin(supabase: any): Promise<Response> {
     .select("id, name, slug")
     .in("id", clubIds);
 
-  const clubMap = new Map((clubs ?? []).map((c: { id: string; name: string; slug: string }) => [c.id, c]));
+  const typedClubs = (clubs ?? []) as ClubRow[];
+  const clubMap = new Map(typedClubs.map((club) => [club.id, club]));
+  const deadlineMap = new Map<string, DeadlineRow[]>();
+
+  for (const deadline of typedDeadlines) {
+    const current = deadlineMap.get(deadline.club_id) ?? [];
+    current.push(deadline);
+    deadlineMap.set(deadline.club_id, current);
+  }
 
   // Step 3: get follows for these clubs
   const { data: follows } = await supabase
@@ -100,7 +134,8 @@ async function sendViaManualJoin(supabase: any): Promise<Response> {
     return Response.json({ sent: 0, failed: 0 });
   }
 
-  const userIds = [...new Set(follows.map((f: { user_id: string }) => f.user_id))] as string[];
+  const typedFollows = follows as FollowRow[];
+  const userIds = [...new Set(typedFollows.map((follow) => follow.user_id))];
 
   // Step 4: get profiles
   const { data: profiles } = await supabase
@@ -108,7 +143,6 @@ async function sendViaManualJoin(supabase: any): Promise<Response> {
     .select("id, email, full_name")
     .in("id", userIds);
 
-  type ProfileRow = { id: string; email: string; full_name: string | null };
   const profileMap = new Map<string, ProfileRow>(
     (profiles ?? []).map((p: ProfileRow) => [p.id, p])
   );
@@ -116,16 +150,14 @@ async function sendViaManualJoin(supabase: any): Promise<Response> {
   // Step 5: group deadlines by user
   const byUser = new Map<string, { email: string; name: string; deadlines: DeadlineItem[] }>();
 
-  for (const follow of follows as { user_id: string; club_id: string }[]) {
+  for (const follow of typedFollows) {
     const profile = profileMap.get(follow.user_id);
     if (!profile) continue;
 
     const club = clubMap.get(follow.club_id);
     if (!club) continue;
 
-    const clubDeadlines = (deadlines as { club_id: string; title: string; deadline_at: string }[]).filter(
-      (d) => d.club_id === follow.club_id
-    );
+    const clubDeadlines = deadlineMap.get(follow.club_id) ?? [];
 
     if (!byUser.has(follow.user_id)) {
       byUser.set(follow.user_id, {
@@ -137,8 +169,8 @@ async function sendViaManualJoin(supabase: any): Promise<Response> {
 
     for (const d of clubDeadlines) {
       byUser.get(follow.user_id)!.deadlines.push({
-        club_name: (club as { name: string }).name,
-        club_slug: (club as { slug: string }).slug,
+        club_name: club.name,
+        club_slug: club.slug,
         deadline_title: d.title,
         deadline_at: d.deadline_at,
       });

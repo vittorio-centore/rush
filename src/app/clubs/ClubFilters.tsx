@@ -20,9 +20,12 @@ const STATUSES = [
   { value: "closed", label: "Closed" },
 ];
 
-export default function ClubFilters({ categories, current }: Props) {
+export default function ClubFilters({ categories, tags, current }: Props) {
   const router = useRouter();
   const pathname = usePathname();
+  const visibleTags = current.tag
+    ? Array.from(new Set([current.tag, ...tags])).slice(0, 24)
+    : tags.slice(0, 24);
 
   function buildHref(patch: Record<string, string | undefined>) {
     const params = new URLSearchParams();
@@ -110,6 +113,30 @@ export default function ClubFilters({ categories, current }: Props) {
               {cat}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Tag filters */}
+      {visibleTags.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Popular tags
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {visibleTags.map((tag) => (
+              <button
+                key={tag}
+                onClick={() => toggle("tag", tag)}
+                className={
+                  isActive("tag", tag)
+                    ? "rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 transition-colors"
+                    : "rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                }
+              >
+                #{tag}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

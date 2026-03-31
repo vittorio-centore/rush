@@ -63,6 +63,16 @@ export default async function PortalImportsPage({
           <p className="mt-1 text-sm text-slate-600">
             `year`, `major`, `status`, `decision_status`, `notes`, `applied_at`
           </p>
+          <details className="mt-4">
+            <summary className="cursor-pointer text-sm font-medium text-slate-700">
+              Show sample CSV
+            </summary>
+            <pre className="mt-3 overflow-x-auto rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-600">
+{`full_name,email,year,major,status,decision_status,notes,applied_at
+Jane Doe,janedoe@umich.edu,Junior,Computer Science,applied,pending,Strong design background,2026-09-12T18:00:00Z
+John Smith,johnsmith@umich.edu,Sophomore,Economics,interview,pending,Met at mass meeting,2026-09-10T18:00:00Z`}
+            </pre>
+          </details>
         </div>
 
         <form className="mt-5 flex flex-col gap-4 rounded-xl border border-slate-200 p-4">

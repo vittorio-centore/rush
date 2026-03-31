@@ -109,7 +109,10 @@ export default async function ApplicationDetailPage({
         </div>
       )}
 
-      <form className="flex flex-col gap-5 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <form
+        action={updateApplication.bind(null, id)}
+        className="flex flex-col gap-5 rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
+      >
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Application source</p>
@@ -244,8 +247,7 @@ export default async function ApplicationDetailPage({
 
         <div className="flex items-center justify-between border-t border-slate-100 pt-4">
           <button
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            formAction={updateApplication.bind(null, id) as any}
+            type="submit"
             className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
           >
             Save changes
