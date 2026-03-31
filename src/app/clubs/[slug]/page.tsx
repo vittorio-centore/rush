@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { addApplication } from "@/app/dashboard/applications/actions";
 import { createClient } from "@/lib/supabase/server";
 import FollowButton from "./FollowButton";
 
@@ -53,6 +54,19 @@ const APP_MODE_LABELS: Record<string, string> = {
   none: "No application",
 };
 
+const TRACKER_STATUS_LABELS: Record<string, string> = {
+  interested: "Interested",
+  applied: "Applied",
+  interview: "Interview",
+  decision: "Decision",
+};
+
+const TRACKER_SOURCE_LABELS: Record<string, string> = {
+  tracked: "Tracker only",
+  native: "Submitted in Rush",
+  external_csv: "Imported by club",
+};
+
 function daysUntil(dateStr: string): number {
   const now = new Date();
   const deadline = new Date(dateStr);
@@ -89,14 +103,33 @@ export default async function ClubPage({ params, searchParams }: Props) {
   const user = authData.user;
 
   let isFollowing = false;
+  let application:
+    | {
+        id: string;
+        status: string;
+        decision_status: string | null;
+        application_source: string;
+      }
+    | null = null;
+
   if (user) {
-    const { data: follow } = await supabase
-      .from("user_follows")
-      .select("id")
-      .eq("user_id", user.id)
-      .eq("club_id", club.id)
-      .maybeSingle();
+    const [{ data: follow }, { data: applicationData }] = await Promise.all([
+      supabase
+        .from("user_follows")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("club_id", club.id)
+        .maybeSingle(),
+      supabase
+        .from("user_applications")
+        .select("id, status, decision_status, application_source")
+        .eq("user_id", user.id)
+        .eq("club_id", club.id)
+        .maybeSingle(),
+    ]);
+
     isFollowing = !!follow;
+    application = applicationData;
 
     // Log view event (fire and forget)
     void supabase.from("events").insert({
@@ -299,6 +332,105 @@ export default async function ClubPage({ params, searchParams }: Props) {
           </div>
 
           {/* Claim */}
+          <div className="rounded-xl border border-slate-200 bg-white p-5">
+            <h2 className="mb-2 text-sm font-semibold text-slate-900">
+              Your workflow
+            </h2>
+            {!user ? (
+              <>
+                <p className="mb-4 text-xs text-slate-500">
+                  Sign in to follow this club, add it to your tracker, and submit applications through Rush when available.
+                </p>
+                <Link
+                  href="/auth"
+                  className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800"
+                >
+                  Sign in to continue
+                </Link>
+              </>
+            ) : application ? (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center rounded-md bg-white px-2 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-inset ring-slate-300/70">
+                      {TRACKER_STATUS_LABELS[application.status] ?? application.status}
+                    </span>
+                    <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-200/70">
+                      {TRACKER_SOURCE_LABELS[application.application_source] ?? application.application_source}
+                    </span>
+                    {application.status === "decision" && application.decision_status ? (
+                      <span className="inline-flex items-center rounded-md bg-white px-2 py-0.5 text-xs font-medium capitalize text-slate-700 ring-1 ring-inset ring-slate-300/70">
+                        {application.decision_status}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-3 text-xs text-slate-500">
+                    This club is already in your tracker. Keep your notes updated or continue the application flow from here.
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <Link
+                    href={`/dashboard/applications/${application.id}`}
+                    className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800"
+                  >
+                    Open tracker
+                  </Link>
+                  {isNativeApplication ? (
+                    <Link
+                      href={`/clubs/${slug}/apply`}
+                      className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                    >
+                      {application.application_source === "native" ? "Edit Rush submission" : "Apply on Rush"}
+                    </Link>
+                  ) : applyHref ? (
+                    <a
+                      href={applyHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                    >
+                      Open external application ↗
+                    </a>
+                  ) : null}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-xs text-slate-500">
+                  Save this club into your personal tracker so deadlines, notes, and application progress live in one place.
+                </p>
+                <form>
+                  <input type="hidden" name="club_id" value={club.id} />
+                  <input type="hidden" name="redirect_to" value={`/clubs/${slug}`} />
+                  <button
+                    formAction={addApplication}
+                    className="inline-flex w-full items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800"
+                  >
+                    Add to tracker
+                  </button>
+                </form>
+                {isNativeApplication ? (
+                  <Link
+                    href={`/clubs/${slug}/apply`}
+                    className="inline-flex w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                  >
+                    Apply on Rush
+                  </Link>
+                ) : applyHref ? (
+                  <a
+                    href={applyHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                  >
+                    Open external application ↗
+                  </a>
+                ) : null}
+              </div>
+            )}
+          </div>
+
           <div className="rounded-xl border border-slate-200 bg-white p-5">
             <h2 className="mb-2 text-sm font-semibold text-slate-900">
               Is this your club?

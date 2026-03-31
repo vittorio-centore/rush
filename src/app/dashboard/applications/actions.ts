@@ -10,6 +10,21 @@ function getString(formData: FormData, key: string) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function buildRedirect(basePath: string, message?: string, error?: string) {
+  const params = new URLSearchParams();
+
+  if (message) {
+    params.set("message", message);
+  }
+
+  if (error) {
+    params.set("error", error);
+  }
+
+  const query = params.toString();
+  return query ? `${basePath}?${query}` : basePath;
+}
+
 export async function addApplication(formData: FormData) {
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
@@ -19,9 +34,10 @@ export async function addApplication(formData: FormData) {
   }
 
   const clubId = getString(formData, "club_id");
+  const redirectTo = getString(formData, "redirect_to") || "/dashboard/applications";
 
   if (!clubId) {
-    redirect("/dashboard/applications?error=Please select a club.");
+    redirect(buildRedirect(redirectTo, undefined, "Please select a club."));
   }
 
   const { error } = await supabase.from("user_applications").insert({
@@ -33,9 +49,7 @@ export async function addApplication(formData: FormData) {
 
   if (error && error.code !== "23505") {
     // 23505 = unique violation — already exists, silently ignore
-    redirect(
-      `/dashboard/applications?error=${encodeURIComponent(error.message)}`,
-    );
+    redirect(buildRedirect(redirectTo, undefined, error.message));
   }
 
   await supabase.from("events").insert({
@@ -46,7 +60,16 @@ export async function addApplication(formData: FormData) {
   });
 
   revalidatePath("/dashboard/applications");
-  redirect("/dashboard/applications");
+  redirect(
+    buildRedirect(
+      redirectTo,
+      error?.code === "23505"
+        ? "This club is already in your tracker."
+        : redirectTo === "/dashboard/applications"
+          ? undefined
+          : "Added to your application tracker.",
+    ),
+  );
 }
 
 export async function deleteApplication(formData: FormData) {

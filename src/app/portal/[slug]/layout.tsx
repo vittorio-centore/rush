@@ -1,5 +1,4 @@
-import Link from "next/link";
-
+import ActiveNav from "@/components/ActiveNav";
 import { getPortalContext } from "@/lib/portal";
 
 const NAV_ITEMS = [
@@ -22,7 +21,7 @@ export default async function ClubPortalLayout({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="rounded-[28px] border border-white/70 bg-white/85 p-5 shadow-sm backdrop-blur">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
@@ -38,20 +37,16 @@ export default async function ClubPortalLayout({
           </span>
         </div>
 
-        <nav className="mt-5 flex flex-wrap gap-2">
-          {NAV_ITEMS.map((item) => {
-            const href = `/portal/${slug}${item.href}`;
-            return (
-              <Link
-                key={href}
-                href={href}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
+        <ActiveNav
+          links={NAV_ITEMS.map((item) => ({
+            href: `/portal/${slug}${item.href}`,
+            label: item.label,
+          }))}
+          containerClassName="mt-5 flex flex-wrap gap-2"
+          baseItemClassName="rounded-full px-3.5 py-2 text-sm font-medium transition-colors"
+          activeItemClassName="bg-slate-900 text-white shadow-sm"
+          inactiveItemClassName="border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+        />
       </div>
 
       {children}

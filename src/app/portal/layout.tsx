@@ -17,20 +17,22 @@ export default async function PortalLayout({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white h-14">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 h-full sm:px-10">
+    <div className="min-h-screen bg-transparent">
+      <header className="h-16 border-b border-white/70 bg-white/90 backdrop-blur">
+        <div className="mx-auto flex h-full max-w-6xl items-center justify-between gap-4 px-6 sm:px-10">
           <div className="flex items-center gap-2">
-            <Link href="/" className="font-bold text-slate-900">
+            <Link href="/" className="font-bold uppercase tracking-[0.2em] text-slate-900">
               Rush
             </Link>
-            <span className="text-xs text-slate-400 ml-2">Portal</span>
+            <span className="ml-2 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+              Recruiter portal
+            </span>
           </div>
 
           <form action={signOut}>
             <button
               type="submit"
-              className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+              className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
             >
               Sign out
             </button>
