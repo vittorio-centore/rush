@@ -70,6 +70,9 @@ SUPABASE_SERVICE_ROLE_KEY=
 NEXT_PUBLIC_APP_URL=
 CRON_SECRET=
 RESEND_API_KEY=
+RECOMMENDER_SERVICE_URL=
+RECOMMENDER_SERVICE_TOKEN=
+RECOMMENDER_ROLLOUT_PERCENT=
 ```
 
 The reminder route is:
@@ -88,12 +91,38 @@ Recommended deployment setup:
 - store all secrets in Vercel project environment variables
 - schedule the cron in Vercel (or GitHub Actions) to hit the route daily
 - verify Resend sender/domain configuration before enabling production reminders
+- keep `RECOMMENDER_ROLLOUT_PERCENT=0` until the FastAPI service is deployed and healthy
 
 Reminder behavior:
 - sends reminders for deadlines due in 1, 3, or 7 days
 - stores send logs in `deadline_reminder_sends` to avoid duplicate reminders on reruns
 
-## 5. Smoke Checklist Before Beta
+## 5. ML Foundation Ops
+
+Rush now includes the ML foundation but should stay dark until the beta data gate is met.
+
+Required secrets for the FastAPI service and nightly jobs:
+
+```bash
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+RECOMMENDER_SERVICE_TOKEN=
+REDIS_URL=
+S3_BUCKET=
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_REGION=
+ACTIVE_MODEL_MANIFEST_KEY=
+```
+
+Operational flow:
+- run `pnpm ml:check-data` locally or rely on `.github/workflows/ml-readiness.yml`
+- deploy [`ml-service`](/Users/vittorioc/rush/ml-service) to Railway with the secrets above
+- keep `RECOMMENDER_ROLLOUT_PERCENT=0` in Vercel until `/healthz` and `/version` respond correctly
+- run `.github/workflows/ml-nightly-train.yml` manually once before enabling the nightly schedule
+- after a model is published, raise `RECOMMENDER_ROLLOUT_PERCENT` to `10`, then `50`, then `100`
+
+## 6. Smoke Checklist Before Beta
 
 - `pnpm lint`
 - `pnpm test`
@@ -104,3 +133,5 @@ Reminder behavior:
 - native application submit succeeds
 - recruiter portal settings/forms/imports load for an approved admin
 - reminder cron returns a success payload with valid secrets
+- `pnpm ml:check-data` returns a readable readiness report
+- dashboard recommendations render via fallback when the ML service is unavailable

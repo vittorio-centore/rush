@@ -10,6 +10,7 @@ import {
   type AnswerMap,
   type FormQuestion,
 } from "@/lib/application-forms";
+import { createEventInsert } from "@/lib/events";
 import { createClient } from "@/lib/supabase/server";
 
 type QuestionRow = FormQuestion & {
@@ -178,17 +179,23 @@ export async function submitNativeApplication(slug: string, formData: FormData) 
   }
 
   await supabase.from("events").insert([
-    {
-      user_id: authData.user.id,
-      club_id: club.id,
-      event_type: "apply",
-      metadata: { source: "native" },
-    },
-    {
-      user_id: authData.user.id,
-      club_id: club.id,
-      event_type: "native_apply",
-    },
+    createEventInsert({
+      userId: authData.user.id,
+      clubId: club.id,
+      eventType: "apply",
+      metadata: {
+        surface: "club_application",
+        source: "native",
+      },
+    }),
+    createEventInsert({
+      userId: authData.user.id,
+      clubId: club.id,
+      eventType: "native_apply",
+      metadata: {
+        surface: "club_application",
+      },
+    }),
   ]);
 
   revalidatePath(`/clubs/${slug}`);

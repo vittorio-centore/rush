@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { insertEvent } from "@/lib/events";
 import { createClient } from "@/lib/supabase/server";
 
 export async function followClub(clubId: string) {
@@ -23,10 +24,11 @@ export async function followClub(clubId: string) {
   }
 
   if (!followError) {
-    await supabase.from("events").insert({
-      user_id: data.user.id,
-      club_id: clubId,
-      event_type: "follow",
+    await insertEvent(supabase, {
+      userId: data.user.id,
+      clubId,
+      eventType: "follow",
+      metadata: { surface: "club_page" },
     });
   }
 
@@ -56,10 +58,11 @@ export async function unfollowClub(clubId: string) {
   }
 
   if ((removedRows ?? []).length > 0) {
-    await supabase.from("events").insert({
-      user_id: data.user.id,
-      club_id: clubId,
-      event_type: "unfollow",
+    await insertEvent(supabase, {
+      userId: data.user.id,
+      clubId,
+      eventType: "unfollow",
+      metadata: { surface: "club_page" },
     });
   }
 

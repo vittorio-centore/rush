@@ -1,19 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-
-const ALLOWED_EVENT_TYPES = new Set([
-  "view",
-  "click",
-  "follow",
-  "unfollow",
-  "apply",
-  "native_apply",
-  "search",
-  "filter",
-]);
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+import { createEventInsert, isEventType } from "@/lib/events";
 
 export async function POST(request: Request): Promise<Response> {
   const supabase = await createClient();
@@ -31,28 +17,39 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: "Invalid JSON payload" }, { status: 400 });
   }
 
-  if (!isRecord(payload)) {
+  if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
     return Response.json({ error: "Invalid event payload" }, { status: 400 });
   }
 
+  const record = payload as Record<string, unknown>;
   const eventType =
-    typeof payload.eventType === "string" ? payload.eventType.trim() : "";
+    typeof record.eventType === "string" ? record.eventType.trim() : "";
   const clubId =
-    typeof payload.clubId === "string" && payload.clubId.trim().length > 0
-      ? payload.clubId.trim()
+    typeof record.clubId === "string" && record.clubId.trim().length > 0
+      ? record.clubId.trim()
       : null;
-  const metadata = isRecord(payload.metadata) ? payload.metadata : {};
+  const metadata = "metadata" in record ? record.metadata : {};
 
-  if (!ALLOWED_EVENT_TYPES.has(eventType)) {
+  if (!isEventType(eventType)) {
     return Response.json({ error: "Unsupported event type" }, { status: 400 });
   }
 
-  const { error } = await supabase.from("events").insert({
-    user_id: authData.user.id,
-    club_id: clubId,
-    event_type: eventType,
-    metadata,
-  });
+  let eventInsert;
+  try {
+    eventInsert = createEventInsert({
+      userId: authData.user.id,
+      clubId,
+      eventType,
+      metadata,
+    });
+  } catch (error) {
+    return Response.json(
+      { error: error instanceof Error ? error.message : "Invalid event metadata" },
+      { status: 400 },
+    );
+  }
+
+  const { error } = await supabase.from("events").insert(eventInsert);
 
   if (error) {
     return Response.json({ error: "Failed to store event" }, { status: 500 });

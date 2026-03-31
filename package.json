@@ -7,8 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test src/**/*.test.ts",
-    "seed-clubs": "tsx scripts/seed-clubs.ts"
+    "test": "sh -lc 'tsx --test $(find src -name \"*.test.ts\" -print)'",
+    "seed-clubs": "tsx scripts/seed-clubs.ts",
+    "ml:check-data": "tsx scripts/check-ml-readiness.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.9.0",

@@ -17,6 +17,7 @@ const VALID_CONDITION_OPERATORS = [
   "includes",
   "not_includes",
 ] as const;
+const VALID_FORM_STATUSES = ["draft", "published"] as const;
 
 function getString(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -35,13 +36,118 @@ function revalidateFormPaths(slug: string) {
   revalidatePath(`/clubs/${slug}`);
 }
 
+async function getPublishValidationError(
+  supabase: Awaited<ReturnType<typeof requirePortalAdmin>>["supabase"],
+  formId: string | null,
+) {
+  if (!formId) {
+    return "Add at least one section and one question before publishing.";
+  }
+
+  const { data: sectionsData } = await supabase
+    .from("club_application_form_sections")
+    .select("id")
+    .eq("form_id", formId);
+
+  const sectionIds = (sectionsData ?? []).map((section) => section.id);
+  if (sectionIds.length === 0) {
+    return "Add at least one section and one question before publishing.";
+  }
+
+  const { data: questionsData } = await supabase
+    .from("club_application_form_questions")
+    .select("id, type")
+    .in("section_id", sectionIds);
+
+  const questions = questionsData ?? [];
+  if (questions.length === 0) {
+    return "Add at least one section and one question before publishing.";
+  }
+
+  const selectQuestionIds = questions
+    .filter((question) => question.type === "single_select" || question.type === "multi_select")
+    .map((question) => question.id);
+
+  if (selectQuestionIds.length === 0) {
+    return null;
+  }
+
+  const { data: optionsData } = await supabase
+    .from("club_application_form_options")
+    .select("question_id")
+    .in("question_id", selectQuestionIds);
+
+  const optionQuestionIds = new Set((optionsData ?? []).map((option) => option.question_id));
+  const missingOptions = selectQuestionIds.filter((questionId) => !optionQuestionIds.has(questionId));
+
+  if (missingOptions.length > 0) {
+    return "Every single-select and multi-select question needs at least one option before publishing.";
+  }
+
+  return null;
+}
+
+function validateCondition(
+  slug: string,
+  formPath: string,
+  questionId: string | null,
+  conditionQuestionId: string,
+  conditionOperator: string,
+  conditionValue: string,
+) {
+  if (!conditionQuestionId) {
+    return {
+      condition_question_id: null,
+      condition_operator: null,
+      condition_value: null,
+    };
+  }
+
+  if (questionId && conditionQuestionId === questionId) {
+    redirect(`${formPath}?error=Questions+cannot+depend+on+themselves.`);
+  }
+
+  if (
+    !VALID_CONDITION_OPERATORS.includes(
+      conditionOperator as (typeof VALID_CONDITION_OPERATORS)[number],
+    )
+  ) {
+    redirect(`${formPath}?error=Choose+a+valid+condition+operator.`);
+  }
+
+  if (!conditionValue) {
+    redirect(`${formPath}?error=Conditional+questions+need+a+condition+value.`);
+  }
+
+  return {
+    condition_question_id: conditionQuestionId,
+    condition_operator: conditionOperator,
+    condition_value: conditionValue,
+  };
+}
+
 export async function saveFormSettings(slug: string, formData: FormData) {
   const { supabase, club } = await requirePortalAdmin(slug);
 
   const title = getString(formData, "title") || "Application form";
   const description = getString(formData, "description");
   const submitButtonText = getString(formData, "submit_button_text") || "Submit application";
-  const status = getString(formData, "status") || "draft";
+  const requestedStatus = getString(formData, "status");
+  const status = VALID_FORM_STATUSES.includes(requestedStatus as (typeof VALID_FORM_STATUSES)[number])
+    ? requestedStatus
+    : "draft";
+
+  const { data: existingForm } = await supabase
+    .from("club_application_forms")
+    .select("id")
+    .eq("club_id", club.id)
+    .maybeSingle();
+
+  const publishValidationError =
+    status === "published"
+      ? await getPublishValidationError(supabase, existingForm?.id ?? null)
+      : null;
+  const persistedStatus = publishValidationError ? "draft" : status;
 
   const { error } = await supabase
     .from("club_application_forms")
@@ -51,7 +157,7 @@ export async function saveFormSettings(slug: string, formData: FormData) {
         title,
         description: description || null,
         submit_button_text: submitButtonText,
-        status,
+        status: persistedStatus,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "club_id" },
@@ -62,6 +168,11 @@ export async function saveFormSettings(slug: string, formData: FormData) {
   }
 
   revalidateFormPaths(slug);
+  if (publishValidationError) {
+    redirect(
+      `/portal/${slug}/forms?error=${encodeURIComponent(`Saved as draft. ${publishValidationError}`)}`,
+    );
+  }
   redirect(`/portal/${slug}/forms?message=Form+settings+saved.`);
 }
 
@@ -171,9 +282,14 @@ export async function addQuestion(slug: string, sectionId: string, formData: For
     placeholder: placeholder || null,
     is_required: isRequired,
     position,
-    condition_question_id: conditionQuestionId || null,
-    condition_operator: conditionOperator || null,
-    condition_value: conditionValue || null,
+    ...validateCondition(
+      slug,
+      `/portal/${slug}/forms`,
+      null,
+      conditionQuestionId,
+      conditionOperator,
+      conditionValue,
+    ),
   });
 
   if (error) {
@@ -201,6 +317,15 @@ export async function updateQuestion(slug: string, questionId: string, formData:
     redirect(`/portal/${slug}/forms?error=Question+type+and+label+are+required.`);
   }
 
+  if (
+    conditionOperator &&
+    !VALID_CONDITION_OPERATORS.includes(
+      conditionOperator as (typeof VALID_CONDITION_OPERATORS)[number],
+    )
+  ) {
+    redirect(`/portal/${slug}/forms?error=Invalid+condition+operator.`);
+  }
+
   const { error } = await supabase
     .from("club_application_form_questions")
     .update({
@@ -210,9 +335,14 @@ export async function updateQuestion(slug: string, questionId: string, formData:
       placeholder: placeholder || null,
       is_required: isRequired,
       position,
-      condition_question_id: conditionQuestionId || null,
-      condition_operator: conditionOperator || null,
-      condition_value: conditionValue || null,
+      ...validateCondition(
+        slug,
+        `/portal/${slug}/forms`,
+        questionId,
+        conditionQuestionId,
+        conditionOperator,
+        conditionValue,
+      ),
       updated_at: new Date().toISOString(),
     })
     .eq("id", questionId);

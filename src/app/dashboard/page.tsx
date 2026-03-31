@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { createClient } from "@/lib/supabase/server";
+import RecommendationRail from "./RecommendationRail";
 
 const STATUS_LABELS: Record<string, string> = {
   open: "Open",
@@ -199,6 +200,8 @@ export default async function DashboardPage() {
           </div>
         </div>
       </section>
+
+      <RecommendationRail userId={user.id} />
 
       <section className="grid gap-4 lg:grid-cols-3">
         <Link

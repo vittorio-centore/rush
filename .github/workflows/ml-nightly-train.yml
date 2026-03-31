@@ -1,0 +1,37 @@
+name: ML Nightly Train
+
+on:
+  schedule:
+    # 06:00 UTC equals 2:00 AM America/Detroit during daylight saving time.
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install ML service dependencies
+        working-directory: ml-service
+        run: uv pip install --system -e ".[dev]"
+
+      - name: Run nightly pipeline
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          RECOMMENDER_SERVICE_TOKEN: ${{ secrets.RECOMMENDER_SERVICE_TOKEN }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          ACTIVE_MODEL_MANIFEST_KEY: ${{ secrets.ACTIVE_MODEL_MANIFEST_KEY }}
+        working-directory: ml-service
+        run: python -m ml_service.jobs.nightly_pipeline

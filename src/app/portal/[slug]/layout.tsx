@@ -3,6 +3,7 @@ import { getPortalContext } from "@/lib/portal";
 
 const NAV_ITEMS = [
   { href: "", label: "Applicants" },
+  { href: "/decisions", label: "Decisions" },
   { href: "/settings", label: "Settings" },
   { href: "/deadlines", label: "Deadlines" },
   { href: "/forms", label: "Forms" },

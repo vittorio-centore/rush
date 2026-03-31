@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { insertEvent } from "@/lib/events";
 import { createClient } from "@/lib/supabase/server";
 
 function getString(formData: FormData, key: string) {
@@ -53,11 +54,14 @@ export async function addApplication(formData: FormData) {
   }
 
   if (!error) {
-    await supabase.from("events").insert({
-      user_id: data.user.id,
-      club_id: clubId,
-      event_type: "apply",
-      metadata: { source: "tracked" },
+    await insertEvent(supabase, {
+      userId: data.user.id,
+      clubId,
+      eventType: "apply_add",
+      metadata: {
+        surface: redirectTo === "/dashboard/applications" ? "dashboard_applications" : "club_page",
+        source: "tracked",
+      },
     });
   }
 

@@ -2,6 +2,14 @@ import { requirePortalAdmin } from "@/lib/portal";
 
 import { updateClubSettings } from "./actions";
 
+const YEAR_OPTIONS = [
+  "Freshman",
+  "Sophomore",
+  "Junior",
+  "Senior",
+  "Graduate",
+] as const;
+
 export default async function PortalSettingsPage({
   params,
   searchParams,
@@ -14,6 +22,7 @@ export default async function PortalSettingsPage({
   const { message, error } = await searchParams;
 
   const tags = Array.isArray(club.tags) ? club.tags.join(", ") : "";
+  const targetYears = new Set(Array.isArray(club.target_years) ? club.target_years : []);
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -85,6 +94,30 @@ export default async function PortalSettingsPage({
             placeholder="consulting, entrepreneurship, design"
             className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           />
+        </div>
+
+        <div className="lg:col-span-2">
+          <span className="mb-2 block text-sm font-medium text-slate-700">Target years</span>
+          <div className="flex flex-wrap gap-2">
+            {YEAR_OPTIONS.map((year) => (
+              <label
+                key={year}
+                className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-700"
+              >
+                <input
+                  type="checkbox"
+                  name="target_years"
+                  value={year}
+                  defaultChecked={targetYears.has(year)}
+                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                {year}
+              </label>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-slate-400">
+            These values power year-fit recommendations later. Leave blank if your club recruits all class years.
+          </p>
         </div>
 
         <div>

@@ -2,6 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { getPortalContext } from "@/lib/portal";
+import {
+  colorTokenClasses,
+  computeWeightedScore,
+  normalizeDecisionWeights,
+} from "@/lib/recruiter-decisions";
 
 import {
   assignReviewer,
@@ -14,6 +19,8 @@ type Application = {
   id: string;
   status: "interested" | "applied" | "interview" | "decision";
   decision_status: "pending" | "accepted" | "rejected" | "waitlisted" | null;
+  stage_id: string | null;
+  decision_label_id: string | null;
   notes: string | null;
   applied_at: string | null;
   created_at: string;
@@ -55,6 +62,20 @@ type Review = {
   technical_knowledge: number;
   communication: number;
   notes: string | null;
+};
+
+type Stage = {
+  id: string;
+  label: string;
+  status_bucket: "interested" | "applied" | "interview" | "decision";
+  color_token: "slate" | "blue" | "amber" | "green" | "rose" | "violet";
+};
+
+type DecisionLabel = {
+  id: string;
+  label: string;
+  decision_status: "pending" | "accepted" | "rejected" | "waitlisted";
+  color_token: "slate" | "blue" | "amber" | "green" | "rose" | "violet";
 };
 
 type SubmissionAnswer = {
@@ -124,14 +145,6 @@ function getAnswerDisplay(answer: SubmissionAnswer) {
   return answer.answer_text || "—";
 }
 
-function average(values: number[]) {
-  if (values.length === 0) {
-    return null;
-  }
-
-  return Math.round((values.reduce((total, value) => total + value, 0) / values.length) * 10) / 10;
-}
-
 export default async function ApplicantPage({
   params,
   searchParams,
@@ -143,10 +156,45 @@ export default async function ApplicantPage({
   const { message, error } = await searchParams;
   const { supabase, club, membership, user } = await getPortalContext(slug);
 
+  const [settingsResponse, stagesResponse, decisionLabelsResponse] = await Promise.all([
+    supabase
+      .from("club_decision_settings")
+      .select(
+        "weight_problem_solving, weight_coding_ability, weight_technical_knowledge, weight_communication",
+      )
+      .eq("club_id", club.id)
+      .maybeSingle(),
+    supabase
+      .from("club_pipeline_stages")
+      .select("id, label, status_bucket, color_token")
+      .eq("club_id", club.id)
+      .order("position"),
+    supabase
+      .from("club_decision_labels")
+      .select("id, label, decision_status, color_token")
+      .eq("club_id", club.id)
+      .order("position"),
+  ]);
+
+  const stages = (stagesResponse.data ?? []) as Stage[];
+  const decisionLabels = (decisionLabelsResponse.data ?? []) as DecisionLabel[];
+  const stageById = new Map(stages.map((stage) => [stage.id, stage]));
+  const decisionLabelById = new Map(decisionLabels.map((label) => [label.id, label]));
+  const weights = normalizeDecisionWeights(
+    settingsResponse.data
+      ? {
+          problem_solving: settingsResponse.data.weight_problem_solving,
+          coding_ability: settingsResponse.data.weight_coding_ability,
+          technical_knowledge: settingsResponse.data.weight_technical_knowledge,
+          communication: settingsResponse.data.weight_communication,
+        }
+      : null,
+  );
+
   const { data: applicationData } = await supabase
     .from("user_applications")
     .select(
-      "id, status, decision_status, notes, applied_at, created_at, updated_at, application_source, external_full_name, external_email, external_year, external_major, profiles(full_name, email, year, major)",
+      "id, status, decision_status, stage_id, decision_label_id, notes, applied_at, created_at, updated_at, application_source, external_full_name, external_email, external_year, external_major, profiles(full_name, email, year, major)",
     )
     .eq("id", applicationId)
     .eq("club_id", club.id)
@@ -243,14 +291,11 @@ export default async function ApplicantPage({
   const applicantYear = getApplicantField(application, "year");
   const applicantMajor = getApplicantField(application, "major");
 
-  const overallAverage = average(
-    reviews.flatMap((review) => [
-      review.problem_solving,
-      review.coding_ability,
-      review.technical_knowledge,
-      review.communication,
-    ]),
-  );
+  const overallAverage = computeWeightedScore(reviews, weights);
+  const currentStage = application.stage_id ? stageById.get(application.stage_id) ?? null : null;
+  const currentDecisionLabel = application.decision_label_id
+    ? decisionLabelById.get(application.decision_label_id) ?? null
+    : null;
 
   return (
     <main className="flex flex-col gap-6">
@@ -285,7 +330,7 @@ export default async function ApplicantPage({
           </div>
           {overallAverage ? (
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Average score</p>
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Weighted score</p>
               <p className="mt-1 text-2xl font-semibold text-slate-900">{overallAverage}/10</p>
             </div>
           ) : null}
@@ -302,12 +347,14 @@ export default async function ApplicantPage({
           </div>
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
             <dt className="text-xs uppercase tracking-[0.16em] text-slate-400">Status</dt>
-            <dd className="mt-1 text-sm font-medium text-slate-900">{application.status}</dd>
+            <dd className="mt-1 text-sm font-medium text-slate-900">
+              {currentStage ? currentStage.label : application.status}
+            </dd>
           </div>
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
             <dt className="text-xs uppercase tracking-[0.16em] text-slate-400">Decision</dt>
             <dd className="mt-1 text-sm font-medium text-slate-900">
-              {application.decision_status ?? "pending"}
+              {currentDecisionLabel ? currentDecisionLabel.label : application.decision_status ?? "pending"}
             </dd>
           </div>
         </dl>
@@ -381,32 +428,82 @@ export default async function ApplicantPage({
               <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <h3 className="text-lg font-semibold text-slate-900">Pipeline control</h3>
                 <form className="mt-4 flex flex-col gap-4">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">Status</label>
-                    <select
-                      name="status"
-                      defaultValue={application.status}
-                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                    >
-                      <option value="interested">Interested</option>
-                      <option value="applied">Applied</option>
-                      <option value="interview">Interview</option>
-                      <option value="decision">Decision</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">Decision</label>
-                    <select
-                      name="decision_status"
-                      defaultValue={application.decision_status ?? "pending"}
-                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                    >
-                      <option value="pending">Pending</option>
-                      <option value="accepted">Accepted</option>
-                      <option value="rejected">Rejected</option>
-                      <option value="waitlisted">Waitlisted</option>
-                    </select>
-                  </div>
+                  {stages.length > 0 ? (
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Stage</label>
+                      <select
+                        name="stage_id"
+                        defaultValue={application.stage_id ?? ""}
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="">Use legacy status</option>
+                        {stages.map((stage) => (
+                          <option key={stage.id} value={stage.id}>
+                            {stage.label}
+                          </option>
+                        ))}
+                      </select>
+                      {currentStage ? (
+                        <span
+                          className={`mt-2 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${colorTokenClasses(currentStage.color_token)}`}
+                        >
+                          {currentStage.label}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Status</label>
+                      <select
+                        name="status"
+                        defaultValue={application.status}
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="interested">Interested</option>
+                        <option value="applied">Applied</option>
+                        <option value="interview">Interview</option>
+                        <option value="decision">Decision</option>
+                      </select>
+                    </div>
+                  )}
+                  {decisionLabels.length > 0 ? (
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Decision label</label>
+                      <select
+                        name="decision_label_id"
+                        defaultValue={application.decision_label_id ?? ""}
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="">Use legacy decision</option>
+                        {decisionLabels.map((decisionLabel) => (
+                          <option key={decisionLabel.id} value={decisionLabel.id}>
+                            {decisionLabel.label}
+                          </option>
+                        ))}
+                      </select>
+                      {currentDecisionLabel ? (
+                        <span
+                          className={`mt-2 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${colorTokenClasses(currentDecisionLabel.color_token)}`}
+                        >
+                          {currentDecisionLabel.label}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Decision</label>
+                      <select
+                        name="decision_status"
+                        defaultValue={application.decision_status ?? "pending"}
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="pending">Pending</option>
+                        <option value="accepted">Accepted</option>
+                        <option value="rejected">Rejected</option>
+                        <option value="waitlisted">Waitlisted</option>
+                      </select>
+                    </div>
+                  )}
                   <div>
                     <label className="mb-1 block text-sm font-medium text-slate-700">Internal notes</label>
                     <textarea

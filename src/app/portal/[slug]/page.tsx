@@ -1,6 +1,11 @@
 import Link from "next/link";
 
 import { getPortalContext } from "@/lib/portal";
+import {
+  colorTokenClasses,
+  computeWeightedScore,
+  normalizeDecisionWeights,
+} from "@/lib/recruiter-decisions";
 
 import { bulkUpdateApplicants } from "./actions";
 
@@ -11,6 +16,8 @@ type Application = {
   applied_at: string | null;
   created_at: string;
   application_source: "tracked" | "native" | "external_csv";
+  stage_id: string | null;
+  decision_label_id: string | null;
   external_full_name: string | null;
   external_email: string | null;
   external_year: string | null;
@@ -35,6 +42,27 @@ type ReviewAggregate = {
   application_id: string;
   average: number | null;
   count: number;
+};
+
+type ReviewRow = {
+  application_id: string;
+  problem_solving: number;
+  coding_ability: number;
+  technical_knowledge: number;
+  communication: number;
+};
+
+type Stage = {
+  id: string;
+  label: string;
+  color_token: "slate" | "blue" | "amber" | "green" | "rose" | "violet";
+};
+
+type DecisionLabel = {
+  id: string;
+  label: string;
+  decision_status: "pending" | "accepted" | "rejected" | "waitlisted";
+  color_token: "slate" | "blue" | "amber" | "green" | "rose" | "violet";
 };
 
 const STATUS_LABELS = {
@@ -102,14 +130,6 @@ function formatDate(dateStr: string | null) {
   });
 }
 
-function averageScore(values: number[]) {
-  if (values.length === 0) {
-    return null;
-  }
-
-  return Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10;
-}
-
 export default async function PortalPage({
   params,
   searchParams,
@@ -130,18 +150,54 @@ export default async function PortalPage({
   const { supabase, club, membership, user } = await getPortalContext(slug);
   const { status, decision, q, year, major, page, message, error } = await searchParams;
 
-  const { data: reviewerAssignments } = membership.role === "reviewer"
-    ? await supabase
-        .from("club_reviewer_assignments")
-        .select("application_id")
-        .eq("reviewer_user_id", user.id)
+  const [reviewerAssignmentsResponse, settingsResponse, stagesResponse, decisionLabelsResponse] =
+    await Promise.all([
+      membership.role === "reviewer"
+        ? supabase
+            .from("club_reviewer_assignments")
+            .select("application_id")
+            .eq("reviewer_user_id", user.id)
+            .eq("club_id", club.id)
+        : Promise.resolve({ data: [] }),
+      supabase
+        .from("club_decision_settings")
+        .select(
+          "weight_problem_solving, weight_coding_ability, weight_technical_knowledge, weight_communication",
+        )
         .eq("club_id", club.id)
-    : { data: [] };
+        .maybeSingle(),
+      supabase
+        .from("club_pipeline_stages")
+        .select("id, label, color_token")
+        .eq("club_id", club.id)
+        .order("position"),
+      supabase
+        .from("club_decision_labels")
+        .select("id, label, decision_status, color_token")
+        .eq("club_id", club.id)
+        .order("position"),
+    ]);
+
+  const reviewerAssignments = reviewerAssignmentsResponse.data ?? [];
+  const stages = (stagesResponse.data ?? []) as Stage[];
+  const decisionLabels = (decisionLabelsResponse.data ?? []) as DecisionLabel[];
+  const stageById = new Map(stages.map((stage) => [stage.id, stage]));
+  const decisionLabelById = new Map(decisionLabels.map((label) => [label.id, label]));
+  const weights = normalizeDecisionWeights(
+    settingsResponse.data
+      ? {
+          problem_solving: settingsResponse.data.weight_problem_solving,
+          coding_ability: settingsResponse.data.weight_coding_ability,
+          technical_knowledge: settingsResponse.data.weight_technical_knowledge,
+          communication: settingsResponse.data.weight_communication,
+        }
+      : null,
+  );
 
   let query = supabase
     .from("user_applications")
     .select(
-      "id, status, decision_status, applied_at, created_at, application_source, external_full_name, external_email, external_year, external_major, profiles(full_name, email, year, major)",
+      "id, status, decision_status, applied_at, created_at, application_source, stage_id, decision_label_id, external_full_name, external_email, external_year, external_major, profiles(full_name, email, year, major)",
     )
     .eq("club_id", club.id)
     .order("created_at", { ascending: false });
@@ -175,15 +231,10 @@ export default async function PortalPage({
         .in("application_id", allApplications.map((application) => application.id))
     : { data: [] };
 
-  const reviewMap = new Map<string, number[]>();
-  for (const review of reviewRows ?? []) {
+  const reviewMap = new Map<string, ReviewRow[]>();
+  for (const review of (reviewRows ?? []) as ReviewRow[]) {
     const current = reviewMap.get(review.application_id) ?? [];
-    current.push(
-      review.problem_solving,
-      review.coding_ability,
-      review.technical_knowledge,
-      review.communication,
-    );
+    current.push(review);
     reviewMap.set(review.application_id, current);
   }
 
@@ -192,8 +243,8 @@ export default async function PortalPage({
     const scores = reviewMap.get(application.id) ?? [];
     reviewAggregates.set(application.id, {
       application_id: application.id,
-      average: averageScore(scores),
-      count: scores.length / 4,
+      average: computeWeightedScore(scores, weights),
+      count: scores.length,
     });
   }
 
@@ -335,7 +386,22 @@ export default async function PortalPage({
       <form className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         {membership.role === "admin" ? (
           <div className="flex flex-col gap-4 border-b border-slate-100 p-4 lg:flex-row lg:items-center">
+            <input type="hidden" name="redirect_to" value={`/portal/${slug}`} />
             <div className="flex flex-1 flex-col gap-3 sm:flex-row">
+              {stages.length > 0 ? (
+                <select
+                  name="stage_id"
+                  defaultValue=""
+                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="">No stage change</option>
+                  {stages.map((stage) => (
+                    <option key={stage.id} value={stage.id}>
+                      {stage.label}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
               <select
                 name="status"
                 defaultValue=""
@@ -359,6 +425,20 @@ export default async function PortalPage({
                 <option value="rejected">Rejected</option>
                 <option value="waitlisted">Waitlisted</option>
               </select>
+              {decisionLabels.length > 0 ? (
+                <select
+                  name="decision_label_id"
+                  defaultValue=""
+                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="">No decision label change</option>
+                  {decisionLabels.map((decisionLabel) => (
+                    <option key={decisionLabel.id} value={decisionLabel.id}>
+                      {decisionLabel.label}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
             </div>
             <button
               formAction={bulkUpdateApplicants.bind(null, slug)}
@@ -433,11 +513,21 @@ export default async function PortalPage({
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-col gap-1">
-                          <span className={STATUS_BADGE[application.status]}>
-                            {STATUS_LABELS[application.status]}
-                          </span>
+                          {application.stage_id && stageById.get(application.stage_id) ? (
+                            <span
+                              className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${colorTokenClasses(stageById.get(application.stage_id)!.color_token)}`}
+                            >
+                              {stageById.get(application.stage_id)!.label}
+                            </span>
+                          ) : (
+                            <span className={STATUS_BADGE[application.status]}>
+                              {STATUS_LABELS[application.status]}
+                            </span>
+                          )}
                           <span className="text-xs capitalize text-slate-500">
-                            {application.decision_status ?? "pending"}
+                            {application.decision_label_id && decisionLabelById.get(application.decision_label_id)
+                              ? decisionLabelById.get(application.decision_label_id)!.label
+                              : application.decision_status ?? "pending"}
                           </span>
                         </div>
                       </td>

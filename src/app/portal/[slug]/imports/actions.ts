@@ -22,6 +22,21 @@ const VALID_DECISIONS = ["pending", "accepted", "rejected", "waitlisted"];
 const REQUIRED_HEADERS = ["full_name", "email"] as const;
 const MAX_IMPORT_FILE_BYTES = 5 * 1024 * 1024;
 
+type ExistingApplication = {
+  id: string;
+  user_id: string | null;
+  application_source: "tracked" | "native" | "external_csv";
+  external_email: string | null;
+  profiles:
+    | {
+        email: string | null;
+      }
+    | {
+        email: string | null;
+      }[]
+    | null;
+};
+
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
@@ -41,6 +56,34 @@ function normalizeRow(row: Record<string, string>): ImportRow {
     notes: row.notes?.trim() || undefined,
     applied_at: row.applied_at?.trim() || undefined,
   };
+}
+
+function getProfileEmail(application: ExistingApplication) {
+  if (!application.profiles) {
+    return null;
+  }
+
+  const profile = Array.isArray(application.profiles)
+    ? application.profiles[0] ?? null
+    : application.profiles;
+
+  return profile?.email?.trim().toLowerCase() || null;
+}
+
+function getApplicationEmail(application: ExistingApplication) {
+  return application.external_email?.trim().toLowerCase() || getProfileEmail(application);
+}
+
+function importPriority(application: ExistingApplication) {
+  if (application.application_source === "external_csv") {
+    return 3;
+  }
+
+  if (application.application_source === "tracked") {
+    return 2;
+  }
+
+  return 1;
 }
 
 export async function importApplicants(slug: string, formData: FormData) {
@@ -123,6 +166,25 @@ export async function importApplicants(slug: string, formData: FormData) {
   let importedRows = 0;
   let errorRows = 0;
 
+  const { data: existingApplicationsData } = await supabase
+    .from("user_applications")
+    .select("id, user_id, application_source, external_email, profiles(email)")
+    .eq("club_id", club.id);
+
+  const existingApplications = (existingApplicationsData ?? []) as ExistingApplication[];
+  const existingByEmail = new Map<string, ExistingApplication>();
+  for (const application of existingApplications) {
+    const email = getApplicationEmail(application);
+    if (!email) {
+      continue;
+    }
+
+    const current = existingByEmail.get(email);
+    if (!current || importPriority(application) > importPriority(current)) {
+      existingByEmail.set(email, application);
+    }
+  }
+
   for (const rawRow of parsed) {
     const row = normalizeRow(rawRow);
 
@@ -149,15 +211,14 @@ export async function importApplicants(slug: string, formData: FormData) {
       continue;
     }
 
-    const { data: existing } = await supabase
-      .from("user_applications")
-      .select("id")
-      .eq("club_id", club.id)
-      .eq("external_email", row.email)
-      .is("user_id", null)
-      .maybeSingle();
+    const existing = existingByEmail.get(row.email) ?? null;
 
     if (existing) {
+      if (existing.application_source === "native") {
+        errorRows += 1;
+        continue;
+      }
+
       const { error } = await supabase
         .from("user_applications")
         .update({
@@ -178,12 +239,19 @@ export async function importApplicants(slug: string, formData: FormData) {
         errorRows += 1;
       } else {
         importedRows += 1;
+        existingByEmail.set(row.email, {
+          ...existing,
+          application_source: "external_csv",
+          external_email: row.email,
+        });
       }
 
       continue;
     }
 
-    const { error } = await supabase.from("user_applications").insert({
+    const { data: inserted, error } = await supabase
+      .from("user_applications")
+      .insert({
       club_id: club.id,
       user_id: null,
       status,
@@ -195,12 +263,17 @@ export async function importApplicants(slug: string, formData: FormData) {
       external_major: row.major ?? null,
       notes: row.notes ?? "",
       applied_at: appliedAt,
-    });
+      })
+      .select("id, user_id, application_source, external_email, profiles(email)")
+      .single();
 
     if (error) {
       errorRows += 1;
     } else {
       importedRows += 1;
+      if (inserted) {
+        existingByEmail.set(row.email, inserted as ExistingApplication);
+      }
     }
   }
 

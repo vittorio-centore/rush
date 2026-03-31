@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { addApplication } from "@/app/dashboard/applications/actions";
+import { TrackedAnchor, TrackedLink } from "@/components/TrackedLink";
+import { insertEvent } from "@/lib/events";
 import { createClient } from "@/lib/supabase/server";
 import FollowButton from "./FollowButton";
 
@@ -81,7 +83,9 @@ export default async function ClubPage({ params, searchParams }: Props) {
 
   const { data: club } = await supabase
     .from("clubs")
-    .select("*")
+    .select(
+      "id, slug, name, description, tags, category, website_url, instagram_url, contact_email, target_years, application_mode, application_url, recruiting_status, verified",
+    )
     .eq("slug", slug)
     .single();
 
@@ -132,10 +136,11 @@ export default async function ClubPage({ params, searchParams }: Props) {
     application = applicationData;
 
     // Log view event (fire and forget)
-    void supabase.from("events").insert({
-      user_id: user.id,
-      club_id: club.id,
-      event_type: "view",
+    void insertEvent(supabase, {
+      userId: user.id,
+      clubId: club.id,
+      eventType: "view",
+      metadata: { surface: "club_page" },
     });
   }
 
@@ -222,16 +227,36 @@ export default async function ClubPage({ params, searchParams }: Props) {
             {club.tags && (club.tags as string[]).length > 0 && (
               <div className="mt-6 flex flex-wrap gap-2">
                 {(club.tags as string[]).map((t) => (
-                  <Link
+                  <TrackedLink
                     key={t}
                     href={`/clubs?tag=${encodeURIComponent(t)}`}
+                    clubId={club.id}
+                    metadata={{
+                      surface: "club_page",
+                      target: "club_directory_tag",
+                    }}
                     className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-500 hover:bg-slate-50 transition-colors"
                   >
                     {t}
-                  </Link>
+                  </TrackedLink>
                 ))}
               </div>
             )}
+
+            {Array.isArray(club.target_years) && club.target_years.length > 0 ? (
+              <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                  Best fit
+                </p>
+                <p className="mt-2 text-sm text-slate-600">
+                  This club usually recruits{" "}
+                  <span className="font-medium text-slate-900">
+                    {club.target_years.join(", ")}
+                  </span>
+                  .
+                </p>
+              </div>
+            ) : null}
           </div>
 
           {/* Links */}
@@ -242,41 +267,55 @@ export default async function ClubPage({ params, searchParams }: Props) {
               </h2>
               <div className="flex flex-wrap gap-3">
                 {club.website_url && (
-                  <a
+                  <TrackedAnchor
                     href={club.website_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    clubId={club.id}
+                    metadata={{
+                      surface: "club_page",
+                      target: "website_url",
+                    }}
                     className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
                   >
                     Website ↗
-                  </a>
+                  </TrackedAnchor>
                 )}
                 {club.instagram_url && (
-                  <a
+                  <TrackedAnchor
                     href={club.instagram_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    clubId={club.id}
+                    metadata={{
+                      surface: "club_page",
+                      target: "instagram_url",
+                    }}
                     className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
                   >
                     Instagram ↗
-                  </a>
+                  </TrackedAnchor>
                 )}
                 {applyHref && (isNativeApplication ? (
-                  <Link
+                  <TrackedLink
                     href={applyHref}
+                    clubId={club.id}
+                    metadata={{
+                      surface: "club_page",
+                      target: "native_application",
+                    }}
                     className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
                   >
                     {applyLabel} →
-                  </Link>
+                  </TrackedLink>
                 ) : (
-                  <a
+                  <TrackedAnchor
                     href={applyHref}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    clubId={club.id}
+                    metadata={{
+                      surface: "club_page",
+                      target: "application_url",
+                    }}
                     className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
                   >
                     {applyLabel} ↗
-                  </a>
+                  </TrackedAnchor>
                 ))}
               </div>
               {club.application_mode && club.application_mode !== "none" && (
@@ -377,21 +416,29 @@ export default async function ClubPage({ params, searchParams }: Props) {
                     Open tracker
                   </Link>
                   {isNativeApplication ? (
-                    <Link
+                    <TrackedLink
                       href={`/clubs/${slug}/apply`}
+                      clubId={club.id}
+                      metadata={{
+                        surface: "club_page",
+                        target: "native_application",
+                      }}
                       className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
                     >
                       {application.application_source === "native" ? "Edit Rush submission" : "Apply on Rush"}
-                    </Link>
+                    </TrackedLink>
                   ) : applyHref ? (
-                    <a
+                    <TrackedAnchor
                       href={applyHref}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      clubId={club.id}
+                      metadata={{
+                        surface: "club_page",
+                        target: "application_url",
+                      }}
                       className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
                     >
                       Open external application ↗
-                    </a>
+                    </TrackedAnchor>
                   ) : null}
                 </div>
               </div>
@@ -411,21 +458,29 @@ export default async function ClubPage({ params, searchParams }: Props) {
                   </button>
                 </form>
                 {isNativeApplication ? (
-                  <Link
+                  <TrackedLink
                     href={`/clubs/${slug}/apply`}
+                    clubId={club.id}
+                    metadata={{
+                      surface: "club_page",
+                      target: "native_application",
+                    }}
                     className="inline-flex w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
                   >
                     Apply on Rush
-                  </Link>
+                  </TrackedLink>
                 ) : applyHref ? (
-                  <a
+                  <TrackedAnchor
                     href={applyHref}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    clubId={club.id}
+                    metadata={{
+                      surface: "club_page",
+                      target: "application_url",
+                    }}
                     className="inline-flex w-full items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
                   >
                     Open external application ↗
-                  </a>
+                  </TrackedAnchor>
                 ) : null}
               </div>
             )}

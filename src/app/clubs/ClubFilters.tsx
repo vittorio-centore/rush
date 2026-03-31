@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 
+import { postBrowserEvent } from "@/lib/events";
+
 type Props = {
   categories: string[];
   tags: string[];
@@ -40,28 +42,20 @@ export default function ClubFilters({ categories, tags, current }: Props) {
   function toggle(key: string, value: string) {
     const next = current[key as keyof typeof current] === value ? undefined : value;
     const merged = { ...current, [key]: next };
-    logEvent("filter", {
-      category: merged.category ?? null,
-      status: merged.status ?? null,
-      tag: merged.tag ?? null,
+    void postBrowserEvent({
+      eventType: "filter",
+      metadata: {
+        surface: "club_directory",
+        category: merged.category ?? null,
+        status: merged.status ?? null,
+        tag: merged.tag ?? null,
+      },
     });
     router.push(buildHref({ [key]: next }));
   }
 
   function isActive(key: string, value: string) {
     return current[key as keyof typeof current] === value;
-  }
-
-  function logEvent(
-    eventType: "search" | "filter",
-    metadata: Record<string, string | null>,
-  ) {
-    void fetch("/api/events", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ eventType, metadata }),
-      keepalive: true,
-    });
   }
 
   return (
@@ -71,14 +65,6 @@ export default function ClubFilters({ categories, tags, current }: Props) {
         onSubmit={(e) => {
           e.preventDefault();
           const q = (e.currentTarget.elements.namedItem("q") as HTMLInputElement).value.trim();
-          if (q) {
-            logEvent("search", {
-              query: q,
-              category: current.category ?? null,
-              status: current.status ?? null,
-              tag: current.tag ?? null,
-            });
-          }
           router.push(buildHref({ q: q || undefined }));
         }}
         className="flex gap-3"

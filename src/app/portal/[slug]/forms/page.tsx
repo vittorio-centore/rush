@@ -92,13 +92,15 @@ export default async function PortalFormsPage({
         .order("position")
     : { data: [] };
 
-  const { data: questionsData } = form
+  const sectionIds = (sectionsData ?? []).map((section) => section.id);
+
+  const { data: questionsData } = form && sectionIds.length > 0
     ? await supabase
         .from("club_application_form_questions")
         .select(
           "id, section_id, type, label, help_text, placeholder, is_required, position, condition_question_id, condition_operator, condition_value",
         )
-        .in("section_id", (sectionsData ?? []).map((section) => section.id))
+        .in("section_id", sectionIds)
         .order("position")
     : { data: [] };
 

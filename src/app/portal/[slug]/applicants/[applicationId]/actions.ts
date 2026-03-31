@@ -32,25 +32,70 @@ export async function updateApplicantStatus(
     redirect(`/portal/${slug}`);
   }
 
+  const rawStageId = getString(formData, "stage_id");
+  const rawDecisionLabelId = getString(formData, "decision_label_id");
   const rawStatus = formData.get("status");
   const rawDecisionStatus = formData.get("decision_status");
   const notes = getString(formData, "notes");
 
-  if (!rawStatus || !VALID_STATUSES.includes(rawStatus as ApplicationStatus)) {
+  let status: ApplicationStatus | null = null;
+  let stageId: string | null = null;
+
+  if (rawStageId) {
+    const { data: stage } = await supabase
+      .from("club_pipeline_stages")
+      .select("id, status_bucket")
+      .eq("id", rawStageId)
+      .eq("club_id", club.id)
+      .maybeSingle();
+
+    if (!stage) {
+      redirect(`/portal/${slug}/applicants/${applicationId}?error=Choose+a+valid+pipeline+stage.`);
+    }
+
+    stageId = stage.id;
+    status = stage.status_bucket as ApplicationStatus;
+  }
+
+  if (!status && (!rawStatus || !VALID_STATUSES.includes(rawStatus as ApplicationStatus))) {
     redirect(`/portal/${slug}/applicants/${applicationId}?error=Invalid+status.`);
   }
 
-  const status = rawStatus as ApplicationStatus;
-  const decisionStatus: DecisionStatus =
-    rawDecisionStatus && VALID_DECISION_STATUSES.includes(rawDecisionStatus as DecisionStatus)
-      ? (rawDecisionStatus as DecisionStatus)
-      : "pending";
+  if (!status) {
+    status = rawStatus as ApplicationStatus;
+  }
+
+  let decisionStatus: DecisionStatus = "pending";
+  let decisionLabelId: string | null = null;
+
+  if (rawDecisionLabelId) {
+    const { data: decisionLabel } = await supabase
+      .from("club_decision_labels")
+      .select("id, decision_status")
+      .eq("id", rawDecisionLabelId)
+      .eq("club_id", club.id)
+      .maybeSingle();
+
+    if (!decisionLabel) {
+      redirect(`/portal/${slug}/applicants/${applicationId}?error=Choose+a+valid+decision+label.`);
+    }
+
+    decisionLabelId = decisionLabel.id;
+    decisionStatus = decisionLabel.decision_status as DecisionStatus;
+  } else if (
+    rawDecisionStatus &&
+    VALID_DECISION_STATUSES.includes(rawDecisionStatus as DecisionStatus)
+  ) {
+    decisionStatus = rawDecisionStatus as DecisionStatus;
+  }
 
   const { data: updated, error: updateError } = await supabase
     .from("user_applications")
     .update({
       status,
       decision_status: decisionStatus,
+      stage_id: stageId,
+      decision_label_id: decisionLabelId,
       notes,
       updated_at: new Date().toISOString(),
     })

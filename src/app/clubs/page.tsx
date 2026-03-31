@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { createClient } from "@/lib/supabase/server";
+import { TrackedLink } from "@/components/TrackedLink";
 import ClubFilters from "./ClubFilters";
+import DirectoryEventReporter from "./DirectoryEventReporter";
 
 export const metadata: Metadata = {
   title: "Club Directory | Rush",
@@ -83,6 +85,7 @@ export default async function ClubsPage({ searchParams }: PageProps) {
         tags={allTags}
         current={{ q, category, status, tag }}
       />
+      <DirectoryEventReporter q={q} resultCount={results.length} />
 
       {results.length === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white p-10 text-center shadow-sm">
@@ -98,8 +101,13 @@ export default async function ClubsPage({ searchParams }: PageProps) {
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {results.map((club) => (
             <li key={club.id}>
-              <Link
+              <TrackedLink
                 href={`/clubs/${club.slug}`}
+                clubId={club.id}
+                metadata={{
+                  surface: "club_directory",
+                  target: "club_page",
+                }}
                 className="group flex h-full flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md transition-shadow"
               >
                 <div className="flex items-start justify-between gap-3">
@@ -142,7 +150,7 @@ export default async function ClubsPage({ searchParams }: PageProps) {
                     ))}
                   </div>
                 )}
-              </Link>
+              </TrackedLink>
             </li>
           ))}
         </ul>

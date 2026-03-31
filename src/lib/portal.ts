@@ -14,6 +14,7 @@ type PortalClub = {
   website_url: string | null;
   instagram_url: string | null;
   contact_email: string | null;
+  target_years: string[] | null;
   application_mode: "none" | "external" | "native";
   application_url: string | null;
   recruiting_status: "unknown" | "open" | "closed" | "rolling";
@@ -35,7 +36,7 @@ export async function getPortalContext(slug: string) {
   const { data: club } = await supabase
     .from("clubs")
     .select(
-      "id, slug, name, description, tags, category, website_url, instagram_url, contact_email, application_mode, application_url, recruiting_status",
+      "id, slug, name, description, tags, category, website_url, instagram_url, contact_email, target_years, application_mode, application_url, recruiting_status",
     )
     .eq("slug", slug)
     .single();
