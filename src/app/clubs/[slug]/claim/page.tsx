@@ -38,6 +38,8 @@ export default async function ClaimPage({ params, searchParams }: Props) {
     .select("id, status")
     .eq("club_id", club.id)
     .eq("user_id", userId)
+    .order("submitted_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   return (
@@ -77,6 +79,10 @@ export default async function ClaimPage({ params, searchParams }: Props) {
           ) : existingClaim?.status === "approved" ? (
             <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
               You already manage this club.
+            </div>
+          ) : existingClaim?.status === "rejected" ? (
+            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Your previous claim was rejected. You can submit a new claim with more detail below.
             </div>
           ) : (
             <form className="mt-5 space-y-4">

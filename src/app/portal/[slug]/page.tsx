@@ -121,13 +121,14 @@ export default async function PortalPage({
     q?: string;
     year?: string;
     major?: string;
+    page?: string;
     message?: string;
     error?: string;
   }>;
 }) {
   const { slug } = await params;
   const { supabase, club, membership, user } = await getPortalContext(slug);
-  const { status, decision, q, year, major, message, error } = await searchParams;
+  const { status, decision, q, year, major, page, message, error } = await searchParams;
 
   const { data: reviewerAssignments } = membership.role === "reviewer"
     ? await supabase
@@ -144,6 +145,14 @@ export default async function PortalPage({
     )
     .eq("club_id", club.id)
     .order("created_at", { ascending: false });
+
+  if (status && ["interested", "applied", "interview", "decision"].includes(status)) {
+    query = query.eq("status", status);
+  }
+
+  if (decision && ["pending", "accepted", "rejected", "waitlisted"].includes(decision)) {
+    query = query.eq("decision_status", decision);
+  }
 
   if (membership.role === "reviewer") {
     const assignedIds = (reviewerAssignments ?? []).map((assignment) => assignment.application_id);
@@ -209,6 +218,24 @@ export default async function PortalPage({
 
     return matchesStatus && matchesDecision && matchesYear && matchesMajor && matchesQuery;
   });
+
+  const pageNumber = Math.max(1, Number.parseInt(page ?? "1", 10) || 1);
+  const pageSize = 50;
+  const totalPages = Math.max(1, Math.ceil(filteredApplications.length / pageSize));
+  const currentPage = Math.min(pageNumber, totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const visibleApplications = filteredApplications.slice(pageStart, pageStart + pageSize);
+
+  function buildPageHref(nextPage: number) {
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    if (decision) params.set("decision", decision);
+    if (q) params.set("q", q);
+    if (year) params.set("year", year);
+    if (major) params.set("major", major);
+    params.set("page", String(nextPage));
+    return `/portal/${slug}?${params.toString()}`;
+  }
 
   const counts = {
     interested: allApplications.filter((application) => application.status === "interested").length,
@@ -380,7 +407,7 @@ export default async function PortalPage({
                 </tr>
               </thead>
               <tbody>
-                {filteredApplications.map((application) => {
+                {visibleApplications.map((application) => {
                   const aggregate = reviewAggregates.get(application.id);
                   return (
                     <tr key={application.id} className="border-b border-slate-100 last:border-0">
@@ -441,6 +468,40 @@ export default async function PortalPage({
             </table>
           </div>
         )}
+
+        {filteredApplications.length > 0 && totalPages > 1 ? (
+          <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm text-slate-500">
+            <span>
+              Page {currentPage} of {totalPages}
+            </span>
+            <div className="flex items-center gap-2">
+              {currentPage > 1 ? (
+                <Link
+                  href={buildPageHref(currentPage - 1)}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
+                >
+                  Previous
+                </Link>
+              ) : (
+                <span className="rounded-lg border border-slate-100 px-3 py-1.5 text-slate-300">
+                  Previous
+                </span>
+              )}
+              {currentPage < totalPages ? (
+                <Link
+                  href={buildPageHref(currentPage + 1)}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
+                >
+                  Next
+                </Link>
+              ) : (
+                <span className="rounded-lg border border-slate-100 px-3 py-1.5 text-slate-300">
+                  Next
+                </span>
+              )}
+            </div>
+          </div>
+        ) : null}
       </form>
     </main>
   );

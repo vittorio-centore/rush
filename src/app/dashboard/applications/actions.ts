@@ -52,12 +52,14 @@ export async function addApplication(formData: FormData) {
     redirect(buildRedirect(redirectTo, undefined, error.message));
   }
 
-  await supabase.from("events").insert({
-    user_id: data.user.id,
-    club_id: clubId,
-    event_type: "apply",
-    metadata: { source: "tracked" },
-  });
+  if (!error) {
+    await supabase.from("events").insert({
+      user_id: data.user.id,
+      club_id: clubId,
+      event_type: "apply",
+      metadata: { source: "tracked" },
+    });
+  }
 
   revalidatePath("/dashboard/applications");
   redirect(

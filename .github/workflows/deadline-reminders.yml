@@ -2,8 +2,8 @@ name: Deadline Reminders
 
 on:
   schedule:
-    # Every Monday at 9am UTC
-    - cron: '0 9 * * 1'
+    # Daily at 12:00 UTC (morning in US Eastern)
+    - cron: '0 12 * * *'
   workflow_dispatch: # allow manual runs
 
 jobs:

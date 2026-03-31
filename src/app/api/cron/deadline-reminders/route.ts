@@ -3,69 +3,27 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/service";
 import { sendDeadlineReminder, type DeadlineItem } from "@/lib/email";
 
-export async function POST(request: Request): Promise<Response> {
-  // Verify shared secret
-  const authHeader = request.headers.get("authorization");
-  const cronSecret = process.env.CRON_SECRET;
+const REMINDER_OFFSETS = [1, 3, 7] as const;
 
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const supabase = createServiceClient();
-
-  // The nested join structure is complex — use a flat query instead
-  const { data: flatRows, error: flatError } = await supabase.rpc(
-    "get_upcoming_deadline_reminders"
-  );
-
-  // Fallback: use a manual join approach if the RPC doesn't exist yet
-  if (flatError) {
-    return await sendViaManualJoin(supabase);
-  }
-
-  return await processFlatRows(flatRows ?? []);
-}
-
-type RpcRow = {
+type DueReminderRow = {
+  user_id: string;
   email: string;
   full_name: string | null;
+  deadline_id: string;
   club_name: string;
   club_slug: string;
   deadline_title: string;
   deadline_at: string;
+  reminder_offset_days: number;
 };
 
-async function processFlatRows(rows: RpcRow[]): Promise<Response> {
-  // Group by email
-  const byEmail = new Map<string, { name: string; deadlines: DeadlineItem[] }>();
-  for (const row of rows) {
-    if (!byEmail.has(row.email)) {
-      byEmail.set(row.email, { name: row.full_name ?? "", deadlines: [] });
-    }
-    byEmail.get(row.email)!.deadlines.push({
-      club_name: row.club_name,
-      club_slug: row.club_slug,
-      deadline_title: row.deadline_title,
-      deadline_at: row.deadline_at,
-    });
-  }
-
-  const results = await Promise.allSettled(
-    Array.from(byEmail.entries()).map(([email, { name, deadlines }]) =>
-      sendDeadlineReminder(email, name, deadlines)
-    )
-  );
-
-  const sent = results.filter((r) => r.status === "fulfilled" && !r.value.error).length;
-  const failed = results.length - sent;
-
-  if (failed > 0) {
-    console.error(`deadline-reminders: ${failed} email(s) failed`);
-  }
-
-  return Response.json({ sent, failed });
-}
+type UserDeadlineBundle = {
+  userId: string;
+  email: string;
+  name: string;
+  deadlines: DeadlineItem[];
+  rows: DueReminderRow[];
+};
 
 type DeadlineRow = {
   id: string;
@@ -91,114 +49,255 @@ type ProfileRow = {
   full_name: string | null;
 };
 
-async function sendViaManualJoin(supabase: SupabaseClient): Promise<Response> {
-  // Step 1: get all active deadlines in the next 14 days
-  const { data: deadlines } = await supabase
+type ReminderLogRow = {
+  user_id: string;
+  deadline_id: string;
+  reminder_offset_days: number;
+  sent_at: string;
+};
+
+function reminderKey(row: Pick<DueReminderRow, "user_id" | "deadline_id" | "reminder_offset_days">) {
+  return `${row.user_id}:${row.deadline_id}:${row.reminder_offset_days}`;
+}
+
+async function handleReminderRequest(request: Request): Promise<Response> {
+  // Verify shared secret
+  const authHeader = request.headers.get("authorization");
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const supabase = createServiceClient();
+
+  const dueRows = await fetchDueReminderRows(supabase);
+  if (dueRows.length === 0) {
+    return Response.json({
+      sent_users: 0,
+      failed_users: 0,
+      skipped_already_sent: 0,
+      due_rows: 0,
+    });
+  }
+
+  const dedupedRows = await removeAlreadySentRows(supabase, dueRows);
+  if (dedupedRows.length === 0) {
+    return Response.json({
+      sent_users: 0,
+      failed_users: 0,
+      skipped_already_sent: dueRows.length,
+      due_rows: dueRows.length,
+    });
+  }
+
+  const bundles = groupRowsByUser(dedupedRows);
+  const sentLogRows: ReminderLogRow[] = [];
+
+  const results = await Promise.allSettled(bundles.map(async (bundle) => {
+    const result = await sendDeadlineReminder(bundle.email, bundle.name, bundle.deadlines);
+    if (!result.error) {
+      const sentAt = new Date().toISOString();
+      for (const row of bundle.rows) {
+        sentLogRows.push({
+          user_id: row.user_id,
+          deadline_id: row.deadline_id,
+          reminder_offset_days: row.reminder_offset_days,
+          sent_at: sentAt,
+        });
+      }
+    }
+    return result;
+  }));
+
+  if (sentLogRows.length > 0) {
+    const { error: logError } = await supabase
+      .from("deadline_reminder_sends")
+      .upsert(sentLogRows, {
+        onConflict: "user_id,deadline_id,reminder_offset_days",
+        ignoreDuplicates: true,
+      });
+    if (logError) {
+      console.error("deadline-reminders: failed to persist send logs", logError.message);
+    }
+  }
+
+  const sentUsers = results.filter((result) => result.status === "fulfilled" && !result.value.error)
+    .length;
+  const failedUsers = results.length - sentUsers;
+
+  if (failedUsers > 0) {
+    console.error(`deadline-reminders: ${failedUsers} user bundle(s) failed`);
+  }
+
+  return Response.json({
+    sent_users: sentUsers,
+    failed_users: failedUsers,
+    skipped_already_sent: dueRows.length - dedupedRows.length,
+    due_rows: dueRows.length,
+  });
+}
+
+async function fetchDueReminderRows(supabase: SupabaseClient): Promise<DueReminderRow[]> {
+  const { data, error } = await supabase.rpc("get_due_deadline_reminders", {
+    p_offsets: [...REMINDER_OFFSETS],
+  });
+
+  if (!error) {
+    return (data ?? []) as DueReminderRow[];
+  }
+
+  return fetchDueReminderRowsFallback(supabase);
+}
+
+function daysUntil(dateStr: string): number {
+  const now = new Date();
+  const deadline = new Date(dateStr);
+  return Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+async function fetchDueReminderRowsFallback(supabase: SupabaseClient): Promise<DueReminderRow[]> {
+  const cutoff = new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: deadlinesData } = await supabase
     .from("club_deadlines")
     .select("id, title, deadline_at, club_id")
     .eq("is_active", true)
     .gt("deadline_at", new Date().toISOString())
-    .lte("deadline_at", new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString())
+    .lte("deadline_at", cutoff)
     .order("deadline_at");
 
-  if (!deadlines || deadlines.length === 0) {
-    return Response.json({ sent: 0, failed: 0 });
+  const deadlines = (deadlinesData ?? []) as DeadlineRow[];
+  if (deadlines.length === 0) {
+    return [];
   }
 
-  const typedDeadlines = deadlines as DeadlineRow[];
-  const clubIds = [...new Set(typedDeadlines.map((deadline) => deadline.club_id))];
-
-  // Step 2: get clubs
-  const { data: clubs } = await supabase
+  const clubIds = [...new Set(deadlines.map((deadline) => deadline.club_id))];
+  const { data: clubsData } = await supabase
     .from("clubs")
     .select("id, name, slug")
     .in("id", clubIds);
+  const clubs = (clubsData ?? []) as ClubRow[];
+  const clubMap = new Map(clubs.map((club) => [club.id, club]));
 
-  const typedClubs = (clubs ?? []) as ClubRow[];
-  const clubMap = new Map(typedClubs.map((club) => [club.id, club]));
-  const deadlineMap = new Map<string, DeadlineRow[]>();
-
-  for (const deadline of typedDeadlines) {
-    const current = deadlineMap.get(deadline.club_id) ?? [];
-    current.push(deadline);
-    deadlineMap.set(deadline.club_id, current);
-  }
-
-  // Step 3: get follows for these clubs
-  const { data: follows } = await supabase
+  const { data: followsData } = await supabase
     .from("user_follows")
     .select("user_id, club_id")
     .in("club_id", clubIds);
-
-  if (!follows || follows.length === 0) {
-    return Response.json({ sent: 0, failed: 0 });
+  const follows = (followsData ?? []) as FollowRow[];
+  if (follows.length === 0) {
+    return [];
   }
 
-  const typedFollows = follows as FollowRow[];
-  const userIds = [...new Set(typedFollows.map((follow) => follow.user_id))];
-
-  // Step 4: get profiles
-  const { data: profiles } = await supabase
+  const userIds = [...new Set(follows.map((follow) => follow.user_id))];
+  const { data: profilesData } = await supabase
     .from("profiles")
     .select("id, email, full_name")
     .in("id", userIds);
+  const profiles = (profilesData ?? []) as ProfileRow[];
+  const profileMap = new Map(profiles.map((profile) => [profile.id, profile]));
 
-  const profileMap = new Map<string, ProfileRow>(
-    (profiles ?? []).map((p: ProfileRow) => [p.id, p])
-  );
+  const deadlinesByClub = new Map<string, DeadlineRow[]>();
+  for (const deadline of deadlines) {
+    const current = deadlinesByClub.get(deadline.club_id) ?? [];
+    current.push(deadline);
+    deadlinesByClub.set(deadline.club_id, current);
+  }
 
-  // Step 5: group deadlines by user
-  const byUser = new Map<string, { email: string; name: string; deadlines: DeadlineItem[] }>();
-
-  for (const follow of typedFollows) {
+  const rows: DueReminderRow[] = [];
+  for (const follow of follows) {
     const profile = profileMap.get(follow.user_id);
-    if (!profile) continue;
-
     const club = clubMap.get(follow.club_id);
-    if (!club) continue;
-
-    const clubDeadlines = deadlineMap.get(follow.club_id) ?? [];
-
-    if (!byUser.has(follow.user_id)) {
-      byUser.set(follow.user_id, {
-        email: profile.email,
-        name: profile.full_name ?? "",
-        deadlines: [],
-      });
+    if (!profile?.email || !club) {
+      continue;
     }
 
-    for (const d of clubDeadlines) {
-      byUser.get(follow.user_id)!.deadlines.push({
+    const clubDeadlines = deadlinesByClub.get(follow.club_id) ?? [];
+    for (const deadline of clubDeadlines) {
+      const offset = daysUntil(deadline.deadline_at);
+      if (!REMINDER_OFFSETS.includes(offset as (typeof REMINDER_OFFSETS)[number])) {
+        continue;
+      }
+
+      rows.push({
+        user_id: follow.user_id,
+        email: profile.email,
+        full_name: profile.full_name,
+        deadline_id: deadline.id,
         club_name: club.name,
         club_slug: club.slug,
-        deadline_title: d.title,
-        deadline_at: d.deadline_at,
+        deadline_title: deadline.title,
+        deadline_at: deadline.deadline_at,
+        reminder_offset_days: offset,
       });
     }
   }
 
-  // Deduplicate deadlines per user (a club could be followed and also appear multiple times)
-  for (const entry of byUser.values()) {
-    const seen = new Set<string>();
-    entry.deadlines = entry.deadlines.filter((d) => {
-      const key = `${d.club_slug}:${d.deadline_at}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
+  return rows;
+}
+
+async function removeAlreadySentRows(
+  supabase: SupabaseClient,
+  rows: DueReminderRow[],
+): Promise<DueReminderRow[]> {
+  const userIds = [...new Set(rows.map((row) => row.user_id))];
+  const deadlineIds = [...new Set(rows.map((row) => row.deadline_id))];
+
+  const { data: sentRows } = await supabase
+    .from("deadline_reminder_sends")
+    .select("user_id, deadline_id, reminder_offset_days")
+    .in("user_id", userIds)
+    .in("deadline_id", deadlineIds)
+    .in("reminder_offset_days", [...REMINDER_OFFSETS]);
+
+  const sentKeys = new Set(
+    (sentRows ?? []).map((row) =>
+      reminderKey({
+        user_id: row.user_id as string,
+        deadline_id: row.deadline_id as string,
+        reminder_offset_days: row.reminder_offset_days as number,
+      }),
+    ),
+  );
+
+  return rows.filter((row) => !sentKeys.has(reminderKey(row)));
+}
+
+function groupRowsByUser(rows: DueReminderRow[]): UserDeadlineBundle[] {
+  const byUser = new Map<string, UserDeadlineBundle>();
+  for (const row of rows) {
+    if (!byUser.has(row.user_id)) {
+      byUser.set(row.user_id, {
+        userId: row.user_id,
+        email: row.email,
+        name: row.full_name ?? "",
+        deadlines: [],
+        rows: [],
+      });
+    }
+
+    const bundle = byUser.get(row.user_id)!;
+    bundle.deadlines.push({
+      club_name: row.club_name,
+      club_slug: row.club_slug,
+      deadline_title: row.deadline_title,
+      deadline_at: row.deadline_at,
     });
-    entry.deadlines.sort(
-      (a, b) => new Date(a.deadline_at).getTime() - new Date(b.deadline_at).getTime()
+    bundle.rows.push(row);
+  }
+
+  for (const bundle of byUser.values()) {
+    bundle.deadlines.sort(
+      (a, b) => new Date(a.deadline_at).getTime() - new Date(b.deadline_at).getTime(),
     );
   }
 
-  const results = await Promise.allSettled(
-    Array.from(byUser.values()).map(({ email, name, deadlines }) =>
-      sendDeadlineReminder(email, name, deadlines)
-    )
-  );
+  return Array.from(byUser.values());
+}
 
-  const sent = results.filter((r) => r.status === "fulfilled" && !(r.value as { error: Error | null }).error).length;
-  const failed = results.length - sent;
+export async function POST(request: Request): Promise<Response> {
+  return handleReminderRequest(request);
+}
 
-  return Response.json({ sent, failed });
+export async function GET(request: Request): Promise<Response> {
+  return handleReminderRequest(request);
 }

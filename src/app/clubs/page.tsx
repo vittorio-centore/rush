@@ -39,42 +39,6 @@ export default async function ClubsPage({ searchParams }: PageProps) {
   const { q, category, status, tag } = resolved;
 
   const supabase = await createClient();
-  const { data: authData } = await supabase.auth.getUser();
-
-  if (authData.user && (q || category || status || tag)) {
-    const events = [];
-
-    if (q) {
-      events.push({
-        user_id: authData.user.id,
-        club_id: null,
-        event_type: "search",
-        metadata: {
-          query: q,
-          category: category ?? null,
-          status: status ?? null,
-          tag: tag ?? null,
-        },
-      });
-    }
-
-    if (category || status || tag) {
-      events.push({
-        user_id: authData.user.id,
-        club_id: null,
-        event_type: "filter",
-        metadata: {
-          category: category ?? null,
-          status: status ?? null,
-          tag: tag ?? null,
-        },
-      });
-    }
-
-    if (events.length > 0) {
-      void supabase.from("events").insert(events);
-    }
-  }
 
   let query = supabase
     .from("clubs")

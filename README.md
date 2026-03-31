@@ -79,7 +79,7 @@ The seed script requires `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_K
 The reminder endpoint is:
 
 ```text
-POST /api/cron/deadline-reminders
+GET or POST /api/cron/deadline-reminders
 Authorization: Bearer <CRON_SECRET>
 ```
 
@@ -91,6 +91,7 @@ curl -X POST http://localhost:3000/api/cron/deadline-reminders \
 ```
 
 The route uses the service-role client and sends emails through Resend.
+Reminder delivery targets deadlines due in **1, 3, or 7 days** and tracks send logs to avoid duplicates on reruns.
 
 ## Current Beta Scope
 
@@ -112,3 +113,13 @@ See the operator runbook in [`docs/operator-runbook.md`](/Users/vittorioc/rush/d
 - Maize Pages seeding
 - manual claim approval
 - reminder cron deployment secrets
+
+## Quality Checks
+
+Run all gates before shipping:
+
+```bash
+pnpm lint
+pnpm test
+pnpm build
+```

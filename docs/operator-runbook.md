@@ -75,7 +75,7 @@ RESEND_API_KEY=
 The reminder route is:
 
 ```text
-POST /api/cron/deadline-reminders
+GET or POST /api/cron/deadline-reminders
 ```
 
 The request must send:
@@ -86,12 +86,17 @@ Authorization: Bearer <CRON_SECRET>
 
 Recommended deployment setup:
 - store all secrets in Vercel project environment variables
-- schedule the cron in Vercel to hit the route daily
+- schedule the cron in Vercel (or GitHub Actions) to hit the route daily
 - verify Resend sender/domain configuration before enabling production reminders
+
+Reminder behavior:
+- sends reminders for deadlines due in 1, 3, or 7 days
+- stores send logs in `deadline_reminder_sends` to avoid duplicate reminders on reruns
 
 ## 5. Smoke Checklist Before Beta
 
 - `pnpm lint`
+- `pnpm test`
 - `pnpm build`
 - sign up, confirm email, sign in, sign out
 - directory pages render with seeded club data

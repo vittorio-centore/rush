@@ -13,12 +13,22 @@ export async function followClub(clubId: string) {
     redirect("/auth");
   }
 
-  await supabase.from("user_follows").insert({ user_id: data.user.id, club_id: clubId });
-  await supabase.from("events").insert({
-    user_id: data.user.id,
-    club_id: clubId,
-    event_type: "follow",
-  });
+  const { error: followError } = await supabase
+    .from("user_follows")
+    .insert({ user_id: data.user.id, club_id: clubId });
+
+  if (followError && followError.code !== "23505") {
+    console.error("followClub failed:", followError.message);
+    return;
+  }
+
+  if (!followError) {
+    await supabase.from("events").insert({
+      user_id: data.user.id,
+      club_id: clubId,
+      event_type: "follow",
+    });
+  }
 
   revalidatePath("/clubs/[slug]", "page");
   revalidatePath("/dashboard");
@@ -33,17 +43,25 @@ export async function unfollowClub(clubId: string) {
     redirect("/auth");
   }
 
-  await supabase
+  const { data: removedRows, error: unfollowError } = await supabase
     .from("user_follows")
     .delete()
+    .select("id")
     .eq("user_id", data.user.id)
     .eq("club_id", clubId);
 
-  await supabase.from("events").insert({
-    user_id: data.user.id,
-    club_id: clubId,
-    event_type: "unfollow",
-  });
+  if (unfollowError) {
+    console.error("unfollowClub failed:", unfollowError.message);
+    return;
+  }
+
+  if ((removedRows ?? []).length > 0) {
+    await supabase.from("events").insert({
+      user_id: data.user.id,
+      club_id: clubId,
+      event_type: "unfollow",
+    });
+  }
 
   revalidatePath("/clubs/[slug]", "page");
   revalidatePath("/dashboard");

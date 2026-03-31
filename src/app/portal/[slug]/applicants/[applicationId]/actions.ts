@@ -46,7 +46,7 @@ export async function updateApplicantStatus(
       ? (rawDecisionStatus as DecisionStatus)
       : "pending";
 
-  await supabase
+  const { data: updated, error: updateError } = await supabase
     .from("user_applications")
     .update({
       status,
@@ -54,8 +54,18 @@ export async function updateApplicantStatus(
       notes,
       updated_at: new Date().toISOString(),
     })
+    .select("id")
     .eq("id", applicationId)
-    .eq("club_id", club.id);
+    .eq("club_id", club.id)
+    .maybeSingle();
+
+  if (updateError || !updated) {
+    redirect(
+      `/portal/${slug}/applicants/${applicationId}?error=${encodeURIComponent(
+        updateError?.message ?? "Unable to update applicant.",
+      )}`,
+    );
+  }
 
   revalidatePath(`/portal/${slug}`);
   revalidatePath(`/portal/${slug}/applicants/${applicationId}`);
@@ -77,6 +87,29 @@ export async function assignReviewer(
 
   if (!reviewerUserId) {
     redirect(`/portal/${slug}/applicants/${applicationId}?error=Choose+a+reviewer.`);
+  }
+
+  const { data: application } = await supabase
+    .from("user_applications")
+    .select("id")
+    .eq("id", applicationId)
+    .eq("club_id", club.id)
+    .maybeSingle();
+
+  if (!application) {
+    redirect(`/portal/${slug}/applicants/${applicationId}?error=Applicant+not+found+for+this+club.`);
+  }
+
+  const { data: reviewerMembership } = await supabase
+    .from("club_admin_memberships")
+    .select("id")
+    .eq("club_id", club.id)
+    .eq("user_id", reviewerUserId)
+    .in("role", ["admin", "reviewer"])
+    .maybeSingle();
+
+  if (!reviewerMembership) {
+    redirect(`/portal/${slug}/applicants/${applicationId}?error=Reviewer+must+be+a+club+member.`);
   }
 
   const { error } = await supabase.from("club_reviewer_assignments").insert({
@@ -106,11 +139,21 @@ export async function unassignReviewer(
     redirect(`/portal/${slug}`);
   }
 
-  await supabase
+  const { data: removed, error: removeError } = await supabase
     .from("club_reviewer_assignments")
     .delete()
+    .select("id")
     .eq("id", assignmentId)
-    .eq("application_id", applicationId);
+    .eq("application_id", applicationId)
+    .maybeSingle();
+
+  if (removeError || !removed) {
+    redirect(
+      `/portal/${slug}/applicants/${applicationId}?error=${encodeURIComponent(
+        removeError?.message ?? "Reviewer assignment not found.",
+      )}`,
+    );
+  }
 
   revalidatePath(`/portal/${slug}`);
   revalidatePath(`/portal/${slug}/applicants/${applicationId}`);
@@ -123,6 +166,17 @@ export async function saveReviewerScorecard(
   formData: FormData,
 ) {
   const { supabase, club, membership, user } = await getPortalContext(slug);
+
+  const { data: application } = await supabase
+    .from("user_applications")
+    .select("id")
+    .eq("id", applicationId)
+    .eq("club_id", club.id)
+    .maybeSingle();
+
+  if (!application) {
+    redirect(`/portal/${slug}/applicants/${applicationId}?error=Applicant+not+found+for+this+club.`);
+  }
 
   const { data: assignment } = await supabase
     .from("club_reviewer_assignments")

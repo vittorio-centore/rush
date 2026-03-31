@@ -19,6 +19,16 @@ type ImportRow = {
 
 const VALID_STATUSES = ["interested", "applied", "interview", "decision"];
 const VALID_DECISIONS = ["pending", "accepted", "rejected", "waitlisted"];
+const REQUIRED_HEADERS = ["full_name", "email"] as const;
+const MAX_IMPORT_FILE_BYTES = 5 * 1024 * 1024;
+
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function isValidIsoDate(value: string): boolean {
+  return !Number.isNaN(new Date(value).getTime());
+}
 
 function normalizeRow(row: Record<string, string>): ImportRow {
   return {
@@ -41,6 +51,10 @@ export async function importApplicants(slug: string, formData: FormData) {
     redirect(`/portal/${slug}/imports?error=Please+upload+a+CSV+file.`);
   }
 
+  if (file.size > MAX_IMPORT_FILE_BYTES) {
+    redirect(`/portal/${slug}/imports?error=CSV+file+must+be+5MB+or+smaller.`);
+  }
+
   const { data: batch, error: batchError } = await supabase
     .from("club_application_import_batches")
     .insert({
@@ -57,7 +71,41 @@ export async function importApplicants(slug: string, formData: FormData) {
   }
 
   const text = await file.text();
-  const parsed = parseCsv(text);
+
+  let headers: string[] = [];
+  let parsed: Record<string, string>[] = [];
+  try {
+    const parsedCsv = parseCsv(text);
+    headers = parsedCsv.headers;
+    parsed = parsedCsv.rows;
+  } catch {
+    await supabase
+      .from("club_application_import_batches")
+      .update({
+        status: "failed",
+        error_message: "Unable to parse CSV. Check quotes, commas, and column structure.",
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", batch.id);
+    redirect(`/portal/${slug}/imports?error=Unable+to+parse+CSV+file.`);
+  }
+
+  const missingHeaders = REQUIRED_HEADERS.filter((header) => !headers.includes(header));
+  if (missingHeaders.length > 0) {
+    await supabase
+      .from("club_application_import_batches")
+      .update({
+        status: "failed",
+        error_message: `Missing required column(s): ${missingHeaders.join(", ")}`,
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", batch.id);
+    redirect(
+      `/portal/${slug}/imports?error=${encodeURIComponent(`Missing required columns: ${missingHeaders.join(", ")}`)}`,
+    );
+  }
 
   if (parsed.length === 0) {
     await supabase
@@ -83,6 +131,11 @@ export async function importApplicants(slug: string, formData: FormData) {
       continue;
     }
 
+    if (!isValidEmail(row.email)) {
+      errorRows += 1;
+      continue;
+    }
+
     const status = VALID_STATUSES.includes(row.status ?? "")
       ? row.status
       : "applied";
@@ -90,6 +143,11 @@ export async function importApplicants(slug: string, formData: FormData) {
       ? row.decision_status
       : "pending";
     const appliedAt = row.applied_at || new Date().toISOString();
+
+    if (!isValidIsoDate(appliedAt)) {
+      errorRows += 1;
+      continue;
+    }
 
     const { data: existing } = await supabase
       .from("user_applications")
