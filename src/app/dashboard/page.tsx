@@ -16,6 +16,30 @@ const STATUS_COLORS: Record<string, string> = {
   unknown: "inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-400/20",
 };
 
+const APPLICATION_STATUS_BADGE = {
+  interested:
+    "inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-400/20",
+  applied:
+    "inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20",
+  interview:
+    "inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20",
+  decision:
+    "inline-flex items-center rounded-md bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20",
+} as const;
+
+const APPLICATION_STATUS_LABELS = {
+  interested: "Interested",
+  applied: "Applied",
+  interview: "Interview",
+  decision: "Decision",
+} as const;
+
+const APPLICATION_SOURCE_LABELS = {
+  tracked: "Tracker only",
+  native: "Submitted in Rush",
+  external_csv: "Imported by club",
+} as const;
+
 function daysUntil(dateStr: string): number {
   const now = new Date();
   const deadline = new Date(dateStr);
@@ -30,12 +54,28 @@ function relativeDate(dateStr: string): string {
   return "passed";
 }
 
+function getRecord<T>(value: T | T[] | null): T | null {
+  if (!value) {
+    return null;
+  }
+
+  return Array.isArray(value) ? value[0] ?? null : value;
+}
+
 type Club = {
   id: string;
   slug: string;
   name: string;
   recruiting_status: string;
   category: string | null;
+};
+
+type ApplicationPreview = {
+  id: string;
+  status: "interested" | "applied" | "interview" | "decision";
+  decision_status: "pending" | "accepted" | "rejected" | "waitlisted" | null;
+  application_source: "tracked" | "native" | "external_csv";
+  clubs: { name: string; slug: string } | { name: string; slug: string }[] | null;
 };
 
 type Deadline = {
@@ -48,18 +88,15 @@ export default async function DashboardPage() {
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
 
-  // Layout handles auth redirect, but we still need the user for queries.
-  // If somehow called without auth, return nothing (layout will have redirected).
   if (!data.user) {
     return null;
   }
 
   const user = data.user;
 
-  // Fetch user profile for display name
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name")
+    .select("full_name, year, major, interests")
     .eq("id", user.id)
     .limit(1)
     .single();
@@ -71,7 +108,6 @@ export default async function DashboardPage() {
       : user.email) ??
     "Student";
 
-  // Fetch followed clubs (up to 6)
   const { data: followRows } = await supabase
     .from("user_follows")
     .select("club_id, clubs(id, slug, name, recruiting_status, category)")
@@ -80,16 +116,21 @@ export default async function DashboardPage() {
     .limit(6);
 
   const followedClubs: Club[] = (followRows ?? []).flatMap((row) => {
-    const c = row.clubs;
-    if (!c) return [];
-    const club = Array.isArray(c) ? c[0] : c;
-    if (!club) return [];
-    return [club as Club];
+    const club = getRecord(row.clubs);
+    return club ? [club as Club] : [];
   });
 
-  const followedClubIds = followedClubs.map((c) => c.id);
+  const followedClubIds = followedClubs.map((club) => club.id);
 
-  // Fetch upcoming deadlines for followed clubs
+  const { data: applicationRows } = await supabase
+    .from("user_applications")
+    .select("id, status, decision_status, application_source, clubs(name, slug)")
+    .eq("user_id", user.id)
+    .order("updated_at", { ascending: false })
+    .limit(4);
+
+  const recentApplications = (applicationRows ?? []) as ApplicationPreview[];
+
   let upcomingDeadlines: Deadline[] = [];
   if (followedClubIds.length > 0) {
     const { data: deadlineRows } = await supabase
@@ -104,20 +145,172 @@ export default async function DashboardPage() {
     upcomingDeadlines = (deadlineRows ?? []) as Deadline[];
   }
 
+  const profileReady = Boolean(profile?.full_name && profile?.year && profile?.major);
+  const interestsCount = Array.isArray(profile?.interests) ? profile.interests.length : 0;
+
   return (
     <div className="flex flex-col gap-8">
-      {/* Page heading */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-        <p className="text-sm text-slate-500 mt-1">Welcome back, {displayName}</p>
-      </div>
+      <section className="rounded-[28px] border border-white/70 bg-white/85 p-6 shadow-sm backdrop-blur">
+        <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+              Student dashboard
+            </p>
+            <h1 className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
+              Welcome back, {displayName}
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600">
+              Keep your Rush season organized in one place: follow clubs, track application stages,
+              and stay ahead of the next deadline.
+            </p>
 
-      {/* Followed clubs section */}
+            {!profileReady || interestsCount === 0 ? (
+              <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <p className="text-sm font-medium text-amber-900">Complete your profile</p>
+                <p className="mt-1 text-sm text-amber-800">
+                  Add your year, major, and interests so clubs and future recommendations have cleaner context.
+                </p>
+                <Link
+                  href="/dashboard/profile"
+                  className="mt-3 inline-flex items-center text-sm font-medium text-amber-900 hover:text-amber-950"
+                >
+                  Finish profile →
+                </Link>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Following</p>
+              <p className="mt-2 text-3xl font-semibold text-slate-900">{followedClubs.length}</p>
+              <p className="mt-1 text-sm text-slate-500">clubs in your watchlist</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Applications</p>
+              <p className="mt-2 text-3xl font-semibold text-slate-900">{recentApplications.length}</p>
+              <p className="mt-1 text-sm text-slate-500">recent items in your tracker</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Upcoming deadlines</p>
+              <p className="mt-2 text-3xl font-semibold text-slate-900">{upcomingDeadlines.length}</p>
+              <p className="mt-1 text-sm text-slate-500">for followed clubs</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-3">
+        <Link
+          href="/clubs"
+          className="rounded-2xl border border-white/70 bg-white/85 p-5 shadow-sm backdrop-blur transition-transform hover:-translate-y-0.5"
+        >
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Discover</p>
+          <h2 className="mt-2 text-lg font-semibold text-slate-900">Browse club directory</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Search organizations, filter by category or tag, and open public recruiting pages.
+          </p>
+        </Link>
+        <Link
+          href="/dashboard/applications"
+          className="rounded-2xl border border-white/70 bg-white/85 p-5 shadow-sm backdrop-blur transition-transform hover:-translate-y-0.5"
+        >
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Track</p>
+          <h2 className="mt-2 text-lg font-semibold text-slate-900">Manage applications</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Keep statuses, essay drafts, and decisions together instead of scattering them across notes apps.
+          </p>
+        </Link>
+        <Link
+          href="/dashboard/follows"
+          className="rounded-2xl border border-white/70 bg-white/85 p-5 shadow-sm backdrop-blur transition-transform hover:-translate-y-0.5"
+        >
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Stay ahead</p>
+          <h2 className="mt-2 text-lg font-semibold text-slate-900">Watch deadlines</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            Follow clubs you care about and keep the most urgent deadlines visible on one screen.
+          </p>
+        </Link>
+      </section>
+
+      {recentApplications.length > 0 ? (
+        <section>
+          <div className="mb-3 flex items-end justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Recent applications
+              </p>
+              <p className="mt-1 text-sm text-slate-500">
+                Jump back into the clubs already in motion.
+              </p>
+            </div>
+            <Link
+              href="/dashboard/applications"
+              className="text-xs font-medium text-slate-600 hover:text-slate-900"
+            >
+              Open full tracker →
+            </Link>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {recentApplications.map((application) => {
+              const club = getRecord(application.clubs);
+
+              return (
+                <Link
+                  key={application.id}
+                  href={`/dashboard/applications/${application.id}`}
+                  className="rounded-2xl border border-white/70 bg-white/85 p-5 shadow-sm backdrop-blur transition-transform hover:-translate-y-0.5"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-base font-semibold text-slate-900">
+                        {club?.name ?? "Unknown club"}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        {APPLICATION_SOURCE_LABELS[application.application_source]}
+                      </p>
+                    </div>
+                    <span className={APPLICATION_STATUS_BADGE[application.status]}>
+                      {APPLICATION_STATUS_LABELS[application.status]}
+                    </span>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
+                    <span>
+                      {application.status === "decision" && application.decision_status
+                        ? `Decision: ${application.decision_status}`
+                        : "Continue tracking"}
+                    </span>
+                    <span>Open →</span>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      {followedClubs.length === 0 && recentApplications.length === 0 ? (
+        <section className="rounded-2xl border border-dashed border-slate-300 bg-white/70 p-6 text-sm text-slate-600">
+          <p className="font-medium text-slate-900">Get started in three steps</p>
+          <ol className="mt-3 grid gap-3 lg:grid-cols-3">
+            <li className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              Browse clubs and follow the ones you care about.
+            </li>
+            <li className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              Add applications to your tracker when recruiting starts.
+            </li>
+            <li className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              Keep notes, deadlines, and outcomes updated in Rush.
+            </li>
+          </ol>
+        </section>
+      ) : null}
+
       <section>
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
           Followed clubs
         </p>
-        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           {followedClubs.length === 0 ? (
             <div className="px-4 py-8 text-center text-sm text-slate-400">
               You haven&apos;t followed any clubs yet.{" "}
@@ -128,23 +321,19 @@ export default async function DashboardPage() {
           ) : (
             <ul>
               {followedClubs.map((club) => {
-                const statusClass =
-                  STATUS_COLORS[club.recruiting_status] ?? STATUS_COLORS.unknown;
-                const statusLabel =
-                  STATUS_LABELS[club.recruiting_status] ?? club.recruiting_status;
+                const statusClass = STATUS_COLORS[club.recruiting_status] ?? STATUS_COLORS.unknown;
+                const statusLabel = STATUS_LABELS[club.recruiting_status] ?? club.recruiting_status;
                 return (
                   <li
                     key={club.id}
-                    className="flex items-center px-4 py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors"
+                    className="flex items-center border-b border-slate-100 px-4 py-3 transition-colors last:border-0 hover:bg-slate-50"
                   >
-                    <span className="text-sm font-medium text-slate-900 flex-1">
+                    <span className="flex-1 text-sm font-medium text-slate-900">
                       {club.name}
                     </span>
-                    {club.category && (
-                      <span className="text-xs text-slate-400 mr-4">
-                        {club.category}
-                      </span>
-                    )}
+                    {club.category ? (
+                      <span className="mr-4 text-xs text-slate-400">{club.category}</span>
+                    ) : null}
                     <span className={`mr-4 ${statusClass}`}>{statusLabel}</span>
                     <Link
                       href={`/clubs/${club.slug}`}
@@ -158,7 +347,7 @@ export default async function DashboardPage() {
             </ul>
           )}
         </div>
-        {followedClubs.length > 0 && (
+        {followedClubs.length > 0 ? (
           <div className="mt-2 text-right">
             <Link
               href="/dashboard/follows"
@@ -167,15 +356,14 @@ export default async function DashboardPage() {
               See all followed clubs →
             </Link>
           </div>
-        )}
+        ) : null}
       </section>
 
-      {/* Upcoming deadlines section */}
       <section>
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-3">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
           Upcoming deadlines
         </p>
-        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           {upcomingDeadlines.length === 0 ? (
             <div className="px-4 py-8 text-center text-sm text-slate-400">
               {followedClubIds.length === 0
@@ -184,28 +372,29 @@ export default async function DashboardPage() {
             </div>
           ) : (
             <ul>
-              {upcomingDeadlines.map((d, i) => {
-                const clubData = Array.isArray(d.clubs) ? d.clubs[0] : d.clubs;
-                const days = daysUntil(d.deadline_at);
+              {upcomingDeadlines.map((deadline, index) => {
+                const club = getRecord(deadline.clubs);
+                const days = daysUntil(deadline.deadline_at);
                 const isUrgent = days <= 7;
+
                 return (
                   <li
-                    key={i}
-                    className="flex items-center px-4 py-3 border-b border-slate-100 last:border-0"
+                    key={`${deadline.title}-${index}`}
+                    className="flex items-center border-b border-slate-100 px-4 py-3 last:border-0"
                   >
-                    <div className="flex-1 min-w-0">
-                      {clubData && (
+                    <div className="min-w-0 flex-1">
+                      {club ? (
                         <Link
-                          href={`/clubs/${clubData.slug}`}
+                          href={`/clubs/${club.slug}`}
                           className="mr-2 text-sm font-medium text-slate-900 transition-colors hover:text-blue-600"
                         >
-                          {clubData.name}
+                          {club.name}
                         </Link>
-                      )}
-                      <span className="text-sm text-slate-500">{d.title}</span>
+                      ) : null}
+                      <span className="text-sm text-slate-500">{deadline.title}</span>
                     </div>
-                    <span className="text-xs text-slate-400 mr-3 shrink-0">
-                      {new Date(d.deadline_at).toLocaleDateString("en-US", {
+                    <span className="mr-3 shrink-0 text-xs text-slate-400">
+                      {new Date(deadline.deadline_at).toLocaleDateString("en-US", {
                         month: "short",
                         day: "numeric",
                       })}
@@ -213,11 +402,11 @@ export default async function DashboardPage() {
                     <span
                       className={
                         isUrgent
-                          ? "inline-flex items-center rounded-md bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600 ring-1 ring-inset ring-red-500/20 shrink-0"
-                          : "inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-300/60 shrink-0"
+                          ? "inline-flex shrink-0 items-center rounded-md bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600 ring-1 ring-inset ring-red-500/20"
+                          : "inline-flex shrink-0 items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-300/60"
                       }
                     >
-                      {relativeDate(d.deadline_at)}
+                      {relativeDate(deadline.deadline_at)}
                     </span>
                   </li>
                 );
