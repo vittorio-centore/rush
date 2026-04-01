@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import {
+  isMissingSchemaColumn,
+  normalizeApplicationSource,
+} from "@/lib/supabase/compat";
 import { createClient } from "@/lib/supabase/server";
 
 import { addApplication, deleteApplication } from "./actions";
@@ -31,24 +35,32 @@ function getClub(app: Application): Club | null {
 }
 
 const STATUS_LABELS: Record<ApplicationStatus, string> = {
-  interested: "Interested",
+  interested: "Planning",
   applied: "Applied",
   interview: "Interview",
   decision: "Decision",
 };
 
 const STATUS_BADGE: Record<ApplicationStatus, string> = {
-  interested: "inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-400/20",
-  applied: "inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20",
-  interview: "inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20",
-  decision: "inline-flex items-center rounded-md bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20",
+  interested:
+    "inline-flex items-center rounded-control bg-slate-100 px-2 py-0.5 text-xs font-medium text-status-closed ring-1 ring-inset ring-status-closed/20",
+  applied:
+    "inline-flex items-center rounded-control bg-brand-oxblood-soft px-2 py-0.5 text-xs font-medium text-brand-oxblood ring-1 ring-inset ring-brand-oxblood/18",
+  interview:
+    "inline-flex items-center rounded-control bg-amber-50 px-2 py-0.5 text-xs font-medium text-status-interview ring-1 ring-inset ring-status-interview/20",
+  decision:
+    "inline-flex items-center rounded-control bg-brand-oxblood-soft px-2 py-0.5 text-xs font-medium text-brand-oxblood ring-1 ring-inset ring-brand-oxblood/18",
 };
 
 const DECISION_BADGE: Record<DecisionStatus, string> = {
-  pending: "inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-400/20",
-  accepted: "inline-flex items-center rounded-md bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20",
-  rejected: "inline-flex items-center rounded-md bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600 ring-1 ring-inset ring-red-500/20",
-  waitlisted: "inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20",
+  pending:
+    "inline-flex items-center rounded-control bg-slate-100 px-2 py-0.5 text-xs font-medium text-status-closed ring-1 ring-inset ring-status-closed/20",
+  accepted:
+    "inline-flex items-center rounded-control bg-brand-oxblood-soft px-2 py-0.5 text-xs font-medium text-brand-oxblood ring-1 ring-inset ring-brand-oxblood/18",
+  rejected:
+    "inline-flex items-center rounded-control bg-red-50 px-2 py-0.5 text-xs font-medium text-status-rejected ring-1 ring-inset ring-status-rejected/20",
+  waitlisted:
+    "inline-flex items-center rounded-control bg-amber-50 px-2 py-0.5 text-xs font-medium text-status-interview ring-1 ring-inset ring-status-interview/20",
 };
 
 const STATUS_ORDER: ApplicationStatus[] = [
@@ -58,17 +70,13 @@ const STATUS_ORDER: ApplicationStatus[] = [
   "decision",
 ];
 
-const COLUMN_HEADING: Record<ApplicationStatus, string> = {
-  interested: "Interested",
-  applied: "Applied",
-  interview: "Interview",
-  decision: "Decision",
-};
-
 const SOURCE_BADGE: Record<Application["application_source"], string> = {
-  tracked: "rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-600",
-  native: "rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-700",
-  external_csv: "rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs text-amber-700",
+  tracked:
+    "rounded-control border border-border-warm bg-white px-2 py-0.5 text-xs text-ink-muted",
+  native:
+    "rounded-control border border-brand-oxblood/18 bg-brand-oxblood-soft px-2 py-0.5 text-xs text-brand-oxblood",
+  external_csv:
+    "rounded-control border border-status-interview/20 bg-amber-50 px-2 py-0.5 text-xs text-status-interview",
 };
 
 const SOURCE_LABEL: Record<Application["application_source"], string> = {
@@ -76,6 +84,44 @@ const SOURCE_LABEL: Record<Application["application_source"], string> = {
   native: "Submitted in Rush",
   external_csv: "Imported by club",
 };
+
+async function loadApplications(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+) {
+  const primary = await supabase
+    .from("user_applications")
+    .select(
+      "id, status, decision_status, created_at, applied_at, application_source, clubs(id, slug, name, category)",
+    )
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (!primary.error) {
+    return (primary.data ?? []) as Application[];
+  }
+
+  if (!isMissingSchemaColumn(primary.error, "application_source")) {
+    console.error("Failed to load applications:", primary.error.message);
+    return [];
+  }
+
+  const fallback = await supabase
+    .from("user_applications")
+    .select("id, status, decision_status, created_at, applied_at, clubs(id, slug, name, category)")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (fallback.error) {
+    console.error("Failed to load applications:", fallback.error.message);
+    return [];
+  }
+
+  return (fallback.data ?? []).map((row) => ({
+    ...row,
+    application_source: normalizeApplicationSource(undefined),
+  })) as Application[];
+}
 
 export default async function ApplicationsPage({
   searchParams,
@@ -91,13 +137,7 @@ export default async function ApplicationsPage({
     redirect("/auth");
   }
 
-  const { data: applications } = await supabase
-    .from("user_applications")
-    .select("id, status, decision_status, created_at, applied_at, application_source, clubs(id, slug, name, category)")
-    .eq("user_id", authData.user.id)
-    .order("created_at", { ascending: false });
-
-  const apps = (applications ?? []) as Application[];
+  const apps = await loadApplications(supabase, authData.user.id);
 
   const grouped = STATUS_ORDER.reduce<Record<ApplicationStatus, Application[]>>(
     (acc, status) => {
@@ -119,153 +159,178 @@ export default async function ApplicationsPage({
 
   return (
     <main className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Applications</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Track your club applications from interest to decision.
-        </p>
-      </div>
+      <section className="rounded-[1.5rem] border border-border-warm bg-white p-5 sm:p-6">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)] lg:items-start">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-oxblood">
+              Tracker
+            </p>
+            <h1 className="mt-3 text-[2.6rem] leading-[0.94] tracking-[-0.05em] text-ink">
+              Recruiting tracker
+            </h1>
+            <p className="mt-3 max-w-md text-sm leading-7 text-ink-muted">
+              Keep each club in one place, update its stage, and keep context without scattered notes.
+            </p>
+          </div>
 
-      {message && (
-        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          <div className="min-w-0 rounded-[1.25rem] border border-border-warm bg-[#f7f5f2] p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-oxblood">
+              Add a club
+            </p>
+            <p className="mt-2 text-sm leading-6 text-ink-muted">
+              Move a club from your saved list or the directory into your active tracker.
+            </p>
+            {availableClubs.length === 0 ? (
+              <p className="mt-4 text-sm text-ink-muted">
+                {allClubs && allClubs.length === 0
+                  ? "No clubs available yet."
+                  : "You are already tracking every available club."}
+              </p>
+            ) : (
+              <form className="mt-4 flex flex-col gap-3 sm:flex-row">
+                <select
+                  id="club_id"
+                  name="club_id"
+                  required
+                  className="min-w-0 flex-1 rounded-[0.95rem] border border-border-warm bg-white px-3.5 py-3 text-sm text-ink outline-none focus:border-brand-action focus:ring-1 focus:ring-brand-action/20"
+                >
+                  <option value="">Select a club…</option>
+                  {availableClubs.map((club: { id: string; name: string }) => (
+                    <option key={club.id} value={club.id}>
+                      {club.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  formAction={addApplication}
+                  className="inline-flex items-center justify-center rounded-control bg-brand-action px-5 py-3 text-sm font-medium text-white transition-[var(--transition-interact)] hover:-translate-y-0.5 hover:bg-[#1F2937]"
+                >
+                  Add
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {message ? (
+        <div className="rounded-[1.25rem] border border-brand-oxblood/20 bg-brand-oxblood-soft px-4 py-3 text-sm text-brand-oxblood">
           {message}
         </div>
-      )}
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+      ) : null}
+      {error ? (
+        <div className="rounded-[1.25rem] border border-status-rejected/25 bg-red-50 px-4 py-3 text-sm text-status-rejected">
           {error}
         </div>
-      )}
-
-      {/* Add application */}
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <p className="text-xs font-medium text-slate-500 mb-3">Track a club</p>
-        {availableClubs.length === 0 ? (
-          <p className="text-sm text-slate-400">
-            {allClubs && allClubs.length === 0
-              ? "No clubs available yet."
-              : "You're already tracking all available clubs."}
-          </p>
-        ) : (
-          <form className="flex items-center gap-3">
-            <select
-              id="club_id"
-              name="club_id"
-              required
-              className="flex-1 max-w-xs rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="">Select a club…</option>
-              {availableClubs.map((club: { id: string; name: string }) => (
-                <option key={club.id} value={club.id}>
-                  {club.name}
-                </option>
-              ))}
-            </select>
-            <button
-              formAction={addApplication}
-              className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-            >
-              Add
-            </button>
-          </form>
-        )}
-      </div>
+      ) : null}
 
       {apps.length === 0 ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-          <p className="text-sm text-slate-400">No applications yet.</p>
-          <p className="mt-1 text-xs text-slate-400">Use the form above to start tracking a club.</p>
-        </div>
+        <section className="rounded-[1.75rem] border border-border-warm bg-white px-6 py-8">
+          <p className="text-sm leading-7 text-ink-muted">
+            No applications yet. Add a club above to start building your tracker.
+          </p>
+        </section>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {STATUS_ORDER.map((status) => (
-            <div key={status} className="flex flex-col gap-2">
-              <div className="flex items-center justify-between mb-1">
-                <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  {COLUMN_HEADING[status]}
-                </h2>
-                <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500">
-                  {grouped[status].length}
-                </span>
-              </div>
-
-              {grouped[status].length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-200 p-4 text-center">
-                  <p className="text-xs text-slate-400">None</p>
+        <section className="overflow-x-auto">
+          <div className="grid min-w-[980px] gap-5 lg:grid-cols-4">
+            {STATUS_ORDER.map((status) => (
+              <section
+                key={status}
+                className="rounded-[1.5rem] border border-border-warm bg-[linear-gradient(180deg,#ffffff_0%,#faf8f7_100%)] p-4"
+              >
+                <div className="flex items-center justify-between gap-3 border-b border-border-warm pb-3">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-oxblood">
+                      {STATUS_LABELS[status]}
+                    </p>
+                    <p className="mt-1 text-sm text-ink-muted">
+                      {grouped[status].length} {grouped[status].length === 1 ? "club" : "clubs"}
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-border-warm bg-white px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-muted">
+                    {grouped[status].length}
+                  </span>
                 </div>
-              ) : (
-                grouped[status].map((app) => {
-                  const club = getClub(app);
-                  return (
-                    <article
-                      key={app.id}
-                      className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
-                    >
-                      <div>
-                        {club ? (
-                          <Link
-                            href={`/clubs/${club.slug}`}
-                            className="text-sm font-semibold text-slate-900 hover:text-blue-600 transition-colors"
-                          >
-                            {club.name}
-                          </Link>
-                        ) : (
-                          <span className="text-sm font-semibold text-slate-400">Unknown club</span>
-                        )}
-                        {club?.category && (
-                          <p className="text-xs text-slate-400 mt-0.5">{club.category}</p>
-                        )}
-                      </div>
 
-                      <div className="flex flex-wrap gap-1.5">
-                        <span className={STATUS_BADGE[status]}>
-                          {STATUS_LABELS[status]}
-                        </span>
-                        <span className={SOURCE_BADGE[app.application_source]}>
-                          {SOURCE_LABEL[app.application_source]}
-                        </span>
-                        {status === "decision" && app.decision_status && (
-                          <span className={`capitalize ${DECISION_BADGE[app.decision_status]}`}>
-                            {app.decision_status}
-                          </span>
-                        )}
-                      </div>
+                <div className="mt-4 space-y-3">
+                  {grouped[status].length === 0 ? (
+                    <div className="rounded-[1.15rem] border border-dashed border-border-warm px-4 py-5 text-sm text-ink-muted">
+                      Nothing here yet.
+                    </div>
+                  ) : (
+                    grouped[status].map((app) => {
+                      const club = getClub(app);
 
-                      {app.applied_at ? (
-                        <p className="text-xs text-slate-400">
-                          Submitted{" "}
-                          {new Date(app.applied_at).toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                          })}
-                        </p>
-                      ) : null}
-
-                      <div className="flex items-center gap-3 border-t border-slate-100 pt-3">
-                        <Link
-                          href={`/dashboard/applications/${app.id}`}
-                          className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                      return (
+                        <article
+                          key={app.id}
+                          className="rounded-[1.15rem] border border-border-warm bg-white p-4 transition-[var(--transition-interact)] hover:-translate-y-0.5"
                         >
-                          Edit →
-                        </Link>
-                        <form className="ml-auto">
-                          <input type="hidden" name="application_id" value={app.id} />
-                          <button
-                            formAction={deleteApplication}
-                            className="text-xs font-medium text-slate-400 hover:text-red-500 transition-colors"
-                          >
-                            Remove
-                          </button>
-                        </form>
-                      </div>
-                    </article>
-                  );
-                })
-              )}
-            </div>
-          ))}
-        </div>
+                          <div>
+                            {club ? (
+                              <Link
+                                href={`/dashboard/applications/${app.id}`}
+                                className="text-base font-medium text-ink transition-colors hover:text-brand-oxblood"
+                              >
+                                {club.name}
+                              </Link>
+                            ) : (
+                              <span className="text-base font-medium text-ink-muted">Unknown club</span>
+                            )}
+                            {club?.category ? (
+                              <p className="mt-1 text-sm text-ink-muted">{club.category}</p>
+                            ) : null}
+                          </div>
+
+                          <div className="mt-3 flex flex-wrap gap-1.5">
+                            <span className={STATUS_BADGE[status]}>{STATUS_LABELS[status]}</span>
+                            <span className={SOURCE_BADGE[app.application_source]}>
+                              {SOURCE_LABEL[app.application_source]}
+                            </span>
+                            {status === "decision" && app.decision_status ? (
+                              <span className={`capitalize ${DECISION_BADGE[app.decision_status]}`}>
+                                {app.decision_status}
+                              </span>
+                            ) : null}
+                          </div>
+
+                          {app.applied_at ? (
+                            <p className="mt-3 text-xs uppercase tracking-[0.16em] text-ink-muted">
+                              Submitted{" "}
+                              {new Date(app.applied_at).toLocaleDateString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                              })}
+                            </p>
+                          ) : null}
+
+                          <div className="mt-4 flex items-center justify-between border-t border-border-warm pt-3">
+                            <Link
+                              href={`/dashboard/applications/${app.id}`}
+                              className="text-sm font-medium text-brand-oxblood transition-colors hover:text-ink"
+                            >
+                              Open
+                            </Link>
+                            <form>
+                              <input type="hidden" name="application_id" value={app.id} />
+                              <button
+                                formAction={deleteApplication}
+                                className="text-sm font-medium text-ink-muted transition-colors hover:text-status-rejected"
+                              >
+                                Remove
+                              </button>
+                            </form>
+                          </div>
+                        </article>
+                      );
+                    })
+                  )}
+                </div>
+              </section>
+            ))}
+          </div>
+        </section>
       )}
     </main>
   );

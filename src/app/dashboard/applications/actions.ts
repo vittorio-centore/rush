@@ -73,7 +73,7 @@ export async function addApplication(formData: FormData) {
         ? "This club is already in your tracker."
         : redirectTo === "/dashboard/applications"
           ? undefined
-          : "Added to your application tracker.",
+          : "Added to your tracker.",
     ),
   );
 }

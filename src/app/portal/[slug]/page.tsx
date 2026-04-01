@@ -7,7 +7,7 @@ import {
   normalizeDecisionWeights,
 } from "@/lib/recruiter-decisions";
 
-import { bulkUpdateApplicants } from "./actions";
+import BulkActionBar from "./BulkActionBar";
 
 type Application = {
   id: string;
@@ -74,13 +74,13 @@ const STATUS_LABELS = {
 
 const STATUS_BADGE = {
   interested:
-    "inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-400/20",
+    "inline-flex items-center rounded-control bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-status-closed",
   applied:
-    "inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20",
+    "inline-flex items-center rounded-control bg-brand-oxblood-soft px-2.5 py-0.5 text-xs font-medium text-brand-oxblood",
   interview:
-    "inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20",
+    "inline-flex items-center rounded-control bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-status-interview",
   decision:
-    "inline-flex items-center rounded-md bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20",
+    "inline-flex items-center rounded-control bg-brand-oxblood-soft px-2.5 py-0.5 text-xs font-medium text-brand-oxblood",
 } as const;
 
 const SOURCE_LABELS = {
@@ -298,39 +298,41 @@ export default async function PortalPage({
   return (
     <main className="flex flex-col gap-6">
       {message ? (
-        <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+        <div className="rounded-control border border-brand-oxblood/20 bg-brand-oxblood-soft px-4 py-3 text-sm text-brand-oxblood">
           {message}
         </div>
       ) : null}
       {error ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+        <div className="rounded-control border border-red-200 bg-red-50 px-4 py-3 text-sm text-status-rejected">
           {error}
         </div>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {/* Stats grid */}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {Object.entries(counts).map(([key, count]) => (
-          <div key={key} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-xs uppercase tracking-[0.16em] text-slate-400">
+          <div key={key} className="rounded-card border border-border bg-white p-5 shadow-card">
+            <p className="text-sm font-medium text-ink-muted">
               {STATUS_LABELS[key as keyof typeof STATUS_LABELS]}
             </p>
-            <p className="mt-2 text-3xl font-semibold text-slate-900">{count}</p>
+            <p className="mt-2 text-3xl font-semibold text-ink">{count}</p>
           </div>
         ))}
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <form className="grid gap-4 lg:grid-cols-[1.4fr_repeat(4,minmax(0,1fr))]">
+      {/* Filters */}
+      <div className="rounded-card border border-border bg-white p-5 shadow-card">
+        <form className="grid gap-3 lg:grid-cols-[1.4fr_repeat(4,minmax(0,1fr))]">
           <input
             name="q"
             defaultValue={q ?? ""}
             placeholder="Search by name or email"
-            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="rounded-control border border-border px-3 py-2 text-sm text-ink outline-none focus:border-brand-action focus:ring-1 focus:ring-brand-action"
           />
           <select
             name="status"
             defaultValue={status ?? ""}
-            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="rounded-control border border-border px-3 py-2 text-sm text-ink outline-none focus:border-brand-action focus:ring-1 focus:ring-brand-action"
           >
             <option value="">All statuses</option>
             {Object.entries(STATUS_LABELS).map(([value, label]) => (
@@ -342,7 +344,7 @@ export default async function PortalPage({
           <select
             name="decision"
             defaultValue={decision ?? ""}
-            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="rounded-control border border-border px-3 py-2 text-sm text-ink outline-none focus:border-brand-action focus:ring-1 focus:ring-brand-action"
           >
             <option value="">All decisions</option>
             <option value="pending">Pending</option>
@@ -353,7 +355,7 @@ export default async function PortalPage({
           <select
             name="year"
             defaultValue={year ?? ""}
-            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="rounded-control border border-border px-3 py-2 text-sm text-ink outline-none focus:border-brand-action focus:ring-1 focus:ring-brand-action"
           >
             <option value="">All years</option>
             {years.map((value) => (
@@ -365,7 +367,7 @@ export default async function PortalPage({
           <select
             name="major"
             defaultValue={major ?? ""}
-            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="rounded-control border border-border px-3 py-2 text-sm text-ink outline-none focus:border-brand-action focus:ring-1 focus:ring-brand-action"
           >
             <option value="">All majors</option>
             {majors.map((value) => (
@@ -376,112 +378,52 @@ export default async function PortalPage({
           </select>
           <button
             type="submit"
-            className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800"
+            className="inline-flex items-center justify-center rounded-control border border-border bg-surface-cool px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-border"
           >
             Apply filters
           </button>
         </form>
       </div>
 
-      <form className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      {/* Applicants table */}
+      <form className="rounded-card border border-border bg-white shadow-card">
         {membership.role === "admin" ? (
-          <div className="flex flex-col gap-4 border-b border-slate-100 p-4 lg:flex-row lg:items-center">
-            <input type="hidden" name="redirect_to" value={`/portal/${slug}`} />
-            <div className="flex flex-1 flex-col gap-3 sm:flex-row">
-              {stages.length > 0 ? (
-                <select
-                  name="stage_id"
-                  defaultValue=""
-                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                >
-                  <option value="">No stage change</option>
-                  {stages.map((stage) => (
-                    <option key={stage.id} value={stage.id}>
-                      {stage.label}
-                    </option>
-                  ))}
-                </select>
-              ) : null}
-              <select
-                name="status"
-                defaultValue=""
-                className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="">No status change</option>
-                {Object.entries(STATUS_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              <select
-                name="decision_status"
-                defaultValue=""
-                className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="">No decision change</option>
-                <option value="pending">Pending</option>
-                <option value="accepted">Accepted</option>
-                <option value="rejected">Rejected</option>
-                <option value="waitlisted">Waitlisted</option>
-              </select>
-              {decisionLabels.length > 0 ? (
-                <select
-                  name="decision_label_id"
-                  defaultValue=""
-                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                >
-                  <option value="">No decision label change</option>
-                  {decisionLabels.map((decisionLabel) => (
-                    <option key={decisionLabel.id} value={decisionLabel.id}>
-                      {decisionLabel.label}
-                    </option>
-                  ))}
-                </select>
-              ) : null}
-            </div>
-            <button
-              formAction={bulkUpdateApplicants.bind(null, slug)}
-              className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-            >
-              Bulk update selected
-            </button>
-          </div>
+          <BulkActionBar slug={slug} stages={stages} decisionLabels={decisionLabels} />
         ) : null}
 
         {filteredApplications.length === 0 ? (
-          <div className="px-6 py-12 text-center text-sm text-slate-400">
+          <div className="px-6 py-12 text-center text-sm text-ink-muted">
             No applicants match the current filters.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full">
               <thead>
-                <tr className="border-b border-slate-100 bg-slate-50">
+                <tr className="border-b border-border bg-surface-cool">
                   {membership.role === "admin" ? (
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-ink-muted">
                       Select
                     </th>
                   ) : null}
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-ink-muted">
                     Applicant
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-ink-muted">
                     Year / Major
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-ink-muted">
                     Status
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-ink-muted">
                     Score
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-ink-muted">
                     Source
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-ink-muted">
                     Applied
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-ink-muted">
                     Review
                   </th>
                 </tr>
@@ -490,7 +432,10 @@ export default async function PortalPage({
                 {visibleApplications.map((application) => {
                   const aggregate = reviewAggregates.get(application.id);
                   return (
-                    <tr key={application.id} className="border-b border-slate-100 last:border-0">
+                    <tr
+                      key={application.id}
+                      className="border-b border-border transition-colors last:border-0 hover:bg-surface-cool"
+                    >
                       {membership.role === "admin" ? (
                         <td className="px-4 py-3">
                           <input name="application_ids" type="checkbox" value={application.id} />
@@ -498,15 +443,15 @@ export default async function PortalPage({
                       ) : null}
                       <td className="px-4 py-3">
                         <div>
-                          <p className="text-sm font-medium text-slate-900">
+                          <p className="text-sm font-medium text-ink">
                             {applicantField(application, "full_name") ?? "Unknown applicant"}
                           </p>
-                          <p className="text-xs text-slate-500">
+                          <p className="text-xs text-ink-muted">
                             {applicantField(application, "email") ?? "—"}
                           </p>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-600">
+                      <td className="px-4 py-3 text-sm text-ink-muted">
                         {[applicantField(application, "year"), applicantField(application, "major")]
                           .filter(Boolean)
                           .join(" · ") || "—"}
@@ -515,7 +460,7 @@ export default async function PortalPage({
                         <div className="flex flex-col gap-1">
                           {application.stage_id && stageById.get(application.stage_id) ? (
                             <span
-                              className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${colorTokenClasses(stageById.get(application.stage_id)!.color_token)}`}
+                              className={`inline-flex items-center rounded-control px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${colorTokenClasses(stageById.get(application.stage_id)!.color_token)}`}
                             >
                               {stageById.get(application.stage_id)!.label}
                             </span>
@@ -524,29 +469,30 @@ export default async function PortalPage({
                               {STATUS_LABELS[application.status]}
                             </span>
                           )}
-                          <span className="text-xs capitalize text-slate-500">
-                            {application.decision_label_id && decisionLabelById.get(application.decision_label_id)
+                          <span className="text-xs capitalize text-ink-muted">
+                            {application.decision_label_id &&
+                            decisionLabelById.get(application.decision_label_id)
                               ? decisionLabelById.get(application.decision_label_id)!.label
                               : application.decision_status ?? "pending"}
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-600">
+                      <td className="px-4 py-3 text-sm text-ink-muted">
                         {aggregate?.average ? `${aggregate.average}/10` : "—"}
                         {aggregate?.count ? (
-                          <span className="ml-1 text-xs text-slate-400">({aggregate.count})</span>
+                          <span className="ml-1 text-xs text-ink-muted">({aggregate.count})</span>
                         ) : null}
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-600">
+                      <td className="px-4 py-3 text-sm text-ink-muted">
                         {SOURCE_LABELS[application.application_source]}
                       </td>
-                      <td className="px-4 py-3 text-sm text-slate-600">
+                      <td className="px-4 py-3 text-sm text-ink-muted">
                         {formatDate(application.applied_at ?? application.created_at)}
                       </td>
                       <td className="px-4 py-3">
                         <Link
                           href={`/portal/${slug}/applicants/${application.id}`}
-                          className="text-sm font-medium text-blue-600 transition-colors hover:text-blue-700"
+                          className="text-sm font-medium text-brand-action transition-colors hover:text-[#1F2937]"
                         >
                           Open →
                         </Link>
@@ -560,7 +506,7 @@ export default async function PortalPage({
         )}
 
         {filteredApplications.length > 0 && totalPages > 1 ? (
-          <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm text-slate-500">
+          <div className="flex items-center justify-between border-t border-border px-4 py-3 text-sm text-ink-muted">
             <span>
               Page {currentPage} of {totalPages}
             </span>
@@ -568,24 +514,24 @@ export default async function PortalPage({
               {currentPage > 1 ? (
                 <Link
                   href={buildPageHref(currentPage - 1)}
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
+                  className="rounded-control border border-border px-3 py-1.5 text-ink-muted transition-colors hover:bg-surface-cool hover:text-ink"
                 >
                   Previous
                 </Link>
               ) : (
-                <span className="rounded-lg border border-slate-100 px-3 py-1.5 text-slate-300">
+                <span className="rounded-control border border-border px-3 py-1.5 text-ink-muted/40">
                   Previous
                 </span>
               )}
               {currentPage < totalPages ? (
                 <Link
                   href={buildPageHref(currentPage + 1)}
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
+                  className="rounded-control border border-border px-3 py-1.5 text-ink-muted transition-colors hover:bg-surface-cool hover:text-ink"
                 >
                   Next
                 </Link>
               ) : (
-                <span className="rounded-lg border border-slate-100 px-3 py-1.5 text-slate-300">
+                <span className="rounded-control border border-border px-3 py-1.5 text-ink-muted/40">
                   Next
                 </span>
               )}

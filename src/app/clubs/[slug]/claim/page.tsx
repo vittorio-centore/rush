@@ -55,7 +55,7 @@ export default async function ClaimPage({ params, searchParams }: Props) {
         <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <h1 className="text-xl font-bold text-slate-900">
             Claim{" "}
-            <span className="text-blue-600">{club.name}</span>
+            <span className="text-brand-action">{club.name}</span>
           </h1>
           <p className="mt-1 text-sm text-slate-500">
             Tell us about your role so we can verify your connection to this club.
@@ -73,7 +73,7 @@ export default async function ClaimPage({ params, searchParams }: Props) {
           )}
 
           {existingClaim?.status === "pending" ? (
-            <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+            <div className="mt-4 rounded-lg border border-brand-action/20 bg-brand-action/10 px-4 py-3 text-sm text-[#225a37]">
               Your claim is pending review. We&apos;ll notify you once it&apos;s processed.
             </div>
           ) : existingClaim?.status === "approved" ? (
@@ -100,13 +100,13 @@ export default async function ClaimPage({ params, searchParams }: Props) {
                   minLength={20}
                   rows={5}
                   placeholder="e.g. I am the current president of this club and have been a member for two years…"
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-brand-action focus:ring-1 focus:ring-brand-action resize-none"
                 />
                 <p className="mt-1 text-xs text-slate-400">Minimum 20 characters.</p>
               </div>
               <button
                 formAction={submitClaim.bind(null, slug)}
-                className="inline-flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+                className="inline-flex w-full items-center justify-center rounded-lg bg-brand-action px-4 py-2.5 text-sm font-medium text-white hover:bg-[#1F2937] transition-colors"
               >
                 Submit claim
               </button>

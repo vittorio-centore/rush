@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { signIn, signUp } from "@/app/auth/actions";
 import { createClient } from "@/lib/supabase/server";
+import AuthForm from "@/app/auth/AuthForm";
+import CheckEmailView from "@/app/auth/CheckEmailView";
 
 type AuthPageProps = {
   searchParams?: Promise<SearchParams>;
@@ -11,7 +12,10 @@ type AuthPageProps = {
 type SearchParams = {
   error?: string;
   message?: string;
+  email?: string;
 };
+
+const CHECK_EMAIL_TRIGGER = "check your email";
 
 export default async function AuthPage({ searchParams }: AuthPageProps) {
   const supabase = await createClient();
@@ -24,110 +28,122 @@ export default async function AuthPage({ searchParams }: AuthPageProps) {
 
   const error = resolvedSearchParams.error;
   const message = resolvedSearchParams.message;
+  const email = resolvedSearchParams.email;
+
+  // Show a dedicated "check your email" view after sign-up
+  const isCheckEmail = message?.toLowerCase().includes(CHECK_EMAIL_TRIGGER);
+
+  if (isCheckEmail) {
+    return <CheckEmailView email={email} />;
+  }
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 lg:flex-row">
-      {/* Left panel */}
-      <div className="flex flex-col justify-center px-8 py-12 lg:w-1/2 lg:px-16 lg:py-20">
-        <div className="mx-auto w-full max-w-sm space-y-6 lg:mx-0">
-          <Link href="/" className="text-sm font-semibold text-slate-900 hover:text-slate-700 transition-colors">
+    <div className="flex min-h-screen flex-col lg:flex-row">
+      <div className="relative flex flex-col justify-between overflow-hidden bg-[linear-gradient(180deg,#fcfcfb_0%,#f7f5f4_100%)] px-8 py-10 lg:w-[54%] lg:px-16 lg:py-16">
+        <BrandPattern />
+
+        <Link
+          href="/"
+          aria-label="Rush home"
+          className="relative z-10 inline-flex items-center gap-3 text-lg font-semibold text-ink transition-[var(--transition-interact)] hover:text-brand-oxblood"
+        >
+          <span style={{ fontFamily: "var(--font-display)" }} className="text-3xl leading-none">
             Rush
-          </Link>
-          <div className="space-y-3">
-            <h1 className="text-2xl font-bold text-slate-900">Sign in to Rush</h1>
-            <p className="text-sm leading-relaxed text-slate-600">
-              Track your club applications and never miss a deadline.
-            </p>
+          </span>
+        </Link>
+
+        <div className="relative z-10 my-auto max-w-2xl py-12">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-brand-oxblood">
+            Sign in to Rush
+          </p>
+          <h1 className="mt-4 font-display text-5xl font-semibold leading-[0.98] tracking-[-0.045em] text-ink lg:text-6xl">
+            Find your people and keep recruiting in view.
+          </h1>
+          <p className="mt-5 max-w-xl text-base leading-8 text-ink-muted lg:text-lg">
+            Browse campus organizations, track applications, and move between student and club workflows without losing context.
+          </p>
+
+          <div className="mt-8 grid max-w-xl gap-3 sm:grid-cols-3">
+            {SOCIAL_PROOF.map((item) => (
+              <div
+                key={item.stat}
+                className="rounded-[1.25rem] border border-border-warm bg-white/75 px-4 py-4 backdrop-blur-sm"
+              >
+                <p className="font-display text-2xl font-semibold text-ink">{item.stat}</p>
+                <p className="mt-1 text-xs uppercase tracking-[0.18em] text-ink-muted">{item.label}</p>
+              </div>
+            ))}
           </div>
-          <div className="border-t border-slate-200" />
-          <p className="text-sm text-slate-400">
-            Trusted by students at University of Michigan.
+        </div>
+
+        <p className="relative z-10 text-xs text-ink-muted/70">
+          © {new Date().getFullYear()} Rush · University of Michigan
+        </p>
+      </div>
+
+      <div className="flex flex-1 flex-col items-center justify-center bg-white px-6 py-12 lg:px-12">
+        <div className="w-full max-w-md">
+          <div className="mb-8 lg:hidden">
+            <Link
+              href="/"
+              aria-label="Rush home"
+              className="text-3xl leading-none text-ink"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              Rush
+            </Link>
+          </div>
+
+          <AuthForm error={error} />
+
+          <p className="mt-6 text-center text-xs text-ink-muted/60">
+            By continuing, you agree to our{" "}
+            <Link href="/terms" className="underline underline-offset-2 hover:text-ink-muted">
+              Terms
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" className="underline underline-offset-2 hover:text-ink-muted">
+              Privacy Policy
+            </Link>
+            .
           </p>
         </div>
       </div>
-
-      {/* Right panel — form */}
-      <div className="flex flex-col justify-center px-8 py-12 lg:w-1/2 lg:px-16 lg:py-20">
-        <div className="mx-auto w-full max-w-sm">
-          <div className="rounded-xl border border-slate-200 bg-white p-8 shadow-sm">
-            <div className="mb-6 space-y-1">
-              <h2 className="text-lg font-semibold text-slate-900">Account access</h2>
-              <p className="text-sm text-slate-500">Sign in or create a new account below.</p>
-            </div>
-
-            {message ? (
-              <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-                {message}
-              </p>
-            ) : null}
-
-            {error ? (
-              <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-                {error}
-              </p>
-            ) : null}
-
-            <form className="space-y-4">
-              <div className="space-y-1">
-                <label htmlFor="full_name" className="block text-sm font-medium text-slate-700">
-                  Full name
-                </label>
-                <input
-                  id="full_name"
-                  name="full_name"
-                  type="text"
-                  placeholder="Alex Morgan"
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label htmlFor="email" className="block text-sm font-medium text-slate-700">
-                  Email
-                </label>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  required
-                  placeholder="you@umich.edu"
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label htmlFor="password" className="block text-sm font-medium text-slate-700">
-                  Password
-                </label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                  minLength={8}
-                  placeholder="At least 8 characters"
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="flex flex-col gap-3 pt-2 sm:flex-row">
-                <button
-                  formAction={signIn}
-                  className="inline-flex flex-1 items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-                >
-                  Sign in
-                </button>
-                <button
-                  formAction={signUp}
-                  className="inline-flex flex-1 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
-                >
-                  Create account
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
     </div>
+  );
+}
+
+// ─── Brand pattern ────────────────────────────────────────────────────────────
+
+const SOCIAL_PROOF = [
+  { stat: "1,800+", label: "student orgs" },
+  { stat: "U of M", label: "Michigan campus" },
+  { stat: "One", label: "shared tracker" },
+];
+
+function BrandPattern() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 h-full w-full"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <linearGradient id="auth-fade" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#6E3B3F" stopOpacity="0.08" />
+          <stop offset="100%" stopColor="#111827" stopOpacity="0.02" />
+        </linearGradient>
+      </defs>
+      <rect x="8%" y="10%" width="84%" height="1" fill="#6E3B3F" fillOpacity="0.08" />
+      <rect x="8%" y="24%" width="54%" height="1" fill="#111827" fillOpacity="0.08" />
+      <rect x="30%" y="78%" width="58%" height="1" fill="#6E3B3F" fillOpacity="0.08" />
+      <rect x="74%" y="18%" width="1" height="54%" fill="#111827" fillOpacity="0.05" />
+      <rect x="18%" y="38%" width="1" height="36%" fill="#6E3B3F" fillOpacity="0.05" />
+      <path d="M0 72 C 18 68, 32 80, 49 76 S 82 63, 100 70" stroke="url(#auth-fade)" strokeWidth="1.5" fill="none" />
+      <pattern id="dots" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
+        <circle cx="2" cy="2" r="1" fill="#17202B" fillOpacity="0.04" />
+      </pattern>
+      <rect width="100%" height="100%" fill="url(#dots)" />
+    </svg>
   );
 }

@@ -94,7 +94,7 @@ export default function ApplicationForm({
                       defaultValue={typeof value === "string" ? value : ""}
                       placeholder={question.placeholder ?? ""}
                       onChange={(event) => setAnswer(question.id, event.target.value)}
-                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-brand-action focus:ring-1 focus:ring-brand-action"
                     />
                   ) : null}
 
@@ -106,7 +106,7 @@ export default function ApplicationForm({
                       placeholder={question.placeholder ?? ""}
                       rows={5}
                       onChange={(event) => setAnswer(question.id, event.target.value)}
-                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-brand-action focus:ring-1 focus:ring-brand-action"
                     />
                   ) : null}
 
@@ -116,7 +116,7 @@ export default function ApplicationForm({
                       required={question.is_required}
                       defaultValue={typeof value === "string" ? value : ""}
                       onChange={(event) => setAnswer(question.id, event.target.value)}
-                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-brand-action focus:ring-1 focus:ring-brand-action"
                     >
                       <option value="">Select an option</option>
                       {question.options.map((option) => (
@@ -169,7 +169,7 @@ export default function ApplicationForm({
       <div>
         <button
           type="submit"
-          className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+          className="inline-flex items-center justify-center rounded-lg bg-brand-action px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#1F2937]"
         >
           {submitButtonText}
         </button>

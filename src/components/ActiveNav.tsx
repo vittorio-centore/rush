@@ -17,8 +17,9 @@ type Props = {
 };
 
 function isActivePath(pathname: string, href: string) {
-  if (href === "/") {
-    return pathname === "/";
+  // Exact-match only routes: root and any path that has no sub-routes in the nav
+  if (href === "/" || href === "/dashboard") {
+    return pathname === href;
   }
 
   return pathname === href || pathname.startsWith(`${href}/`);

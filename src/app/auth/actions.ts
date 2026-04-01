@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
@@ -8,6 +9,18 @@ function getString(formData: FormData, key: string) {
   const value = formData.get(key);
 
   return typeof value === "string" ? value.trim() : "";
+}
+
+async function getRequestOrigin() {
+  const headerStore = await headers();
+  const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host");
+
+  if (!host) {
+    return "http://localhost:3000";
+  }
+
+  const proto = headerStore.get("x-forwarded-proto") ?? "https";
+  return `${proto}://${host}`;
 }
 
 export async function signIn(formData: FormData) {
@@ -55,7 +68,27 @@ export async function signUp(formData: FormData) {
     redirect(`/auth?error=${encodeURIComponent(error.message)}`);
   }
 
-  redirect("/auth?message=Check your email to confirm your account.");
+  redirect(
+    `/auth?message=Check your email to confirm your account.&email=${encodeURIComponent(email)}`
+  );
+}
+
+export async function signInWithGoogle() {
+  const supabase = await createClient();
+  const origin = await getRequestOrigin();
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${origin}/auth/callback`,
+    },
+  });
+
+  if (error || !data.url) {
+    redirect(`/auth?error=${encodeURIComponent(error?.message ?? "Google sign-in is unavailable right now.")}`);
+  }
+
+  redirect(data.url);
 }
 
 export async function signOut() {

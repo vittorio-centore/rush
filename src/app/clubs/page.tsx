@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { createClient } from "@/lib/supabase/server";
 import { TrackedLink } from "@/components/TrackedLink";
+import SiteHeader from "@/components/SiteHeader";
 import ClubFilters from "./ClubFilters";
 import DirectoryEventReporter from "./DirectoryEventReporter";
 
@@ -30,11 +31,34 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_BADGE: Record<string, string> = {
-  open: "inline-flex items-center rounded-md bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20",
-  closed: "inline-flex items-center rounded-md bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600 ring-1 ring-inset ring-red-500/20",
-  rolling: "inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-600/20",
-  unknown: "inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 ring-1 ring-inset ring-slate-400/20",
+  open: "inline-flex items-center rounded-control bg-teal-50 px-2.5 py-0.5 text-xs font-medium text-status-open ring-1 ring-inset ring-status-open/20",
+  closed:
+    "inline-flex items-center rounded-control bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-status-closed ring-1 ring-inset ring-status-closed/20",
+  rolling:
+    "inline-flex items-center rounded-control bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-status-interview ring-1 ring-inset ring-status-interview/20",
+  unknown:
+    "inline-flex items-center rounded-control bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-ink-muted ring-1 ring-inset ring-border/60",
 };
+
+/** A thin top border accent per category — cycles through brand hues */
+const CATEGORY_ACCENT: Record<string, string> = {
+  Business: "border-t-brand-primary",
+  Engineering: "border-t-brand-secondary",
+  "Pre-Med": "border-t-brand-secondary",
+  "Pre-Law": "border-t-brand-action",
+  "Arts & Culture": "border-t-brand-primary",
+  "Community Service": "border-t-brand-secondary",
+  Athletics: "border-t-brand-primary",
+  Research: "border-t-brand-action",
+  Politics: "border-t-brand-action",
+  Media: "border-t-brand-primary",
+  Entrepreneurship: "border-t-brand-primary",
+};
+
+function categoryAccent(category: string | null): string {
+  if (!category) return "border-t-border-warm";
+  return CATEGORY_ACCENT[category] ?? "border-t-brand-primary";
+}
 
 export default async function ClubsPage({ searchParams }: PageProps) {
   const resolved: SearchParams = (await searchParams) ?? {};
@@ -69,92 +93,167 @@ export default async function ClubsPage({ searchParams }: PageProps) {
   ).sort() as string[];
 
   const results = clubs ?? [];
+  const { data: authData } = await supabase.auth.getUser();
+  const isAuthenticated = !!authData.user;
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-12 sm:px-10 lg:px-12">
-      <div className="mb-8 flex flex-col gap-1">
-        <h1 className="text-2xl font-bold text-slate-900">Clubs</h1>
-        <p className="text-sm text-slate-500">
-          {results.length} {results.length === 1 ? "club" : "clubs"} found
-          {q ? ` for "${q}"` : ""}
-        </p>
+    <div className="min-h-screen bg-surface-warm">
+      <SiteHeader isAuthenticated={isAuthenticated} />
+
+      {/* Page header — full-bleed tinted band */}
+      <div className="border-b border-border-warm bg-surface-cool">
+        <div className="mx-auto w-full max-w-6xl px-6 py-12 sm:px-10 lg:px-12">
+          <div className="px-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-action">
+              Club directory
+            </p>
+            <h1
+              className="mt-3 text-5xl font-semibold leading-[1.05] tracking-tight text-ink sm:text-6xl"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              Browse Michigan organizations in one searchable directory.
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-ink-muted">
+              Compare recruiting status, open real club pages, and narrow the list by category,
+              tags, and search terms.
+            </p>
+            <p className="mt-4 text-xs uppercase tracking-[0.16em] text-ink-muted">
+              {results.length} {results.length === 1 ? "club" : "clubs"} found
+              {q ? ` for "${q}"` : ""}
+            </p>
+          </div>
+        </div>
       </div>
 
-      <ClubFilters
-        categories={categories}
-        tags={allTags}
-        current={{ q, category, status, tag }}
-      />
-      <DirectoryEventReporter q={q} resultCount={results.length} />
+      <div className="mx-auto w-full max-w-6xl px-6 py-8 sm:px-10 lg:px-12">
+        {/* Desktop: sidebar + grid layout */}
+        <div className="lg:grid lg:grid-cols-[280px_1fr] lg:gap-10">
+          {/* Filter sidebar */}
+          <aside className="mb-8 lg:mb-0">
+            <div className="rounded-container border border-border-warm bg-white p-5 shadow-card lg:sticky lg:top-24">
+              <ClubFilters
+                categories={categories}
+                tags={allTags}
+                current={{ q, category, status, tag }}
+              />
+            </div>
+          </aside>
 
-      {results.length === 0 ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-          <p className="text-slate-400">No clubs match your filters.</p>
-          <Link
-            href="/clubs"
-            className="mt-4 inline-block text-sm font-medium text-blue-600"
-          >
-            Clear filters
-          </Link>
+          {/* Results grid */}
+          <section>
+            <DirectoryEventReporter q={q} resultCount={results.length} />
+
+            {results.length === 0 ? (
+              <div className="flex flex-col items-center gap-4 rounded-card border border-border-warm bg-surface-warm p-14 text-center shadow-card">
+                <span className="text-4xl" role="img" aria-label="No results">
+                  🔍
+                </span>
+                <p className="font-medium text-ink">No clubs match your filters.</p>
+                <p className="text-sm text-ink-muted">
+                  Try adjusting your search or removing a filter.
+                </p>
+                <Link
+                  href="/clubs"
+                  className="mt-1 inline-flex items-center justify-center rounded-control bg-brand-action px-4 py-2 text-sm font-medium text-white hover:bg-[#1F2937] transition-colors"
+                >
+                  Clear filters
+                </Link>
+              </div>
+            ) : (
+              <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {results.map((club) => (
+                  <li key={club.id}>
+                    <ClubCard club={club} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </div>
-      ) : (
-        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {results.map((club) => (
-            <li key={club.id}>
-              <TrackedLink
-                href={`/clubs/${club.slug}`}
-                clubId={club.id}
-                metadata={{
-                  surface: "club_directory",
-                  target: "club_page",
-                }}
-                className="group flex h-full flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md transition-shadow"
+      </div>
+    </div>
+  );
+}
+
+/* ── Sub-components ────────────────────────────────────────────── */
+
+type ClubRow = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  tags: string[] | null;
+  category: string | null;
+  recruiting_status: string;
+  verified: boolean | null;
+};
+
+function ClubCard({ club }: { club: ClubRow }) {
+  return (
+    <TrackedLink
+      href={`/clubs/${club.slug ?? club.id}`}
+      clubId={club.id}
+      metadata={{ surface: "club_directory", target: "club_page" }}
+      className={`group flex h-full flex-col rounded-card border border-border-warm bg-white shadow-card hover:shadow-card-hover hover:-translate-y-0.5 transition-[box-shadow,transform] duration-150 ease-out border-t-4 ${categoryAccent(club.category)}`}
+    >
+      <div className="flex flex-1 flex-col gap-3 p-5">
+        {/* Name row */}
+        <div className="flex items-start justify-between gap-3">
+          <h2
+            className="text-base font-semibold text-ink leading-snug"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            {club.name}
+            {club.verified && (
+              <span
+                className="ml-1.5 inline-flex items-center text-xs text-brand-secondary"
+                title="Verified"
+                aria-label="Verified club"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <h2 className="text-base font-semibold text-slate-900">
-                    {club.name}
-                    {club.verified && (
-                      <span className="ml-1.5 inline-flex items-center text-xs text-blue-600" title="Verified">
-                        ✓
-                      </span>
-                    )}
-                  </h2>
-                  <span
-                    className={`shrink-0 ${STATUS_BADGE[club.recruiting_status] ?? STATUS_BADGE.unknown}`}
-                  >
-                    {STATUS_LABELS[club.recruiting_status] ?? club.recruiting_status}
-                  </span>
-                </div>
+                ✓
+              </span>
+            )}
+          </h2>
 
-                {club.category && (
-                  <p className="mt-1 text-xs text-slate-500">
-                    {club.category}
-                  </p>
-                )}
+        </div>
 
-                {club.description && (
-                  <p className="mt-3 flex-1 text-sm text-slate-600 line-clamp-2">
-                    {club.description}
-                  </p>
-                )}
+        {/* Category */}
+        {club.category && (
+          <p className="text-xs font-medium text-ink-muted">{club.category}</p>
+        )}
 
-                {club.tags && club.tags.length > 0 && (
-                  <div className="mt-4 flex flex-wrap gap-1.5">
-                    {(club.tags as string[]).slice(0, 4).map((t) => (
-                      <span
-                        key={t}
-                        className="rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-500"
-                      >
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </TrackedLink>
-            </li>
-          ))}
-        </ul>
-      )}
-    </main>
+        {/* Description */}
+        {club.description && (
+          <p className="flex-1 text-sm leading-relaxed text-ink-muted line-clamp-2">
+            {club.description}
+          </p>
+        )}
+
+        {Array.isArray(club.tags) && club.tags.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {club.tags.slice(0, 3).map((tag) => (
+              <span
+                key={tag}
+                className="rounded-control border border-border-warm bg-surface-cool px-2 py-0.5 text-[11px] text-ink-muted"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      {/* Footer row */}
+      <div className="flex items-center justify-between gap-3 border-t border-border-warm px-5 py-3">
+        <span
+          className={`shrink-0 ${STATUS_BADGE[club.recruiting_status] ?? STATUS_BADGE.unknown}`}
+        >
+          {STATUS_LABELS[club.recruiting_status] ?? club.recruiting_status}
+        </span>
+        <span className="text-xs font-medium text-brand-action group-hover:underline">
+          Open club page →
+        </span>
+      </div>
+    </TrackedLink>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useOptimistic, useTransition } from "react";
 import { followClub, unfollowClub } from "./actions";
 
 type Props = {
@@ -10,13 +10,15 @@ type Props = {
 
 export default function FollowButton({ clubId, isFollowing }: Props) {
   const [isPending, startTransition] = useTransition();
+  const [optimisticFollowing, setOptimisticFollowing] = useOptimistic(isFollowing);
 
   function handleClick() {
-    startTransition(() => {
-      if (isFollowing) {
-        unfollowClub(clubId);
+    startTransition(async () => {
+      setOptimisticFollowing(!optimisticFollowing);
+      if (optimisticFollowing) {
+        await unfollowClub(clubId);
       } else {
-        followClub(clubId);
+        await followClub(clubId);
       }
     });
   }
@@ -25,13 +27,13 @@ export default function FollowButton({ clubId, isFollowing }: Props) {
     <button
       onClick={handleClick}
       disabled={isPending}
-      className={`inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
-        isFollowing
-          ? "border border-slate-200 bg-white text-slate-700 hover:bg-red-50 hover:border-red-200 hover:text-red-600"
-          : "bg-blue-600 text-white hover:bg-blue-700"
+      className={`inline-flex items-center justify-center rounded-control px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
+        optimisticFollowing
+          ? "border border-border-warm bg-white text-ink hover:border-status-rejected/30 hover:bg-red-50 hover:text-status-rejected"
+          : "border border-brand-action bg-brand-action text-white hover:bg-[#1F2937]"
       }`}
     >
-      {isPending ? "…" : isFollowing ? "✓ Following" : "Follow"}
+      {optimisticFollowing ? "✓ Following" : "Follow"}
     </button>
   );
 }

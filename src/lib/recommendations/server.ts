@@ -1,5 +1,9 @@
 import "server-only";
 
+import {
+  isMissingSchemaColumn,
+  normalizeTargetYears,
+} from "@/lib/supabase/compat";
 import { createServiceClient } from "@/lib/supabase/service";
 
 import { recommendationReasonText } from "./reasons";
@@ -40,19 +44,42 @@ async function fetchClubRows(clubIds: string[]) {
   }
 
   const supabase = createServiceClient();
-  const { data, error } = await supabase
+  const primary = await supabase
     .from("clubs")
     .select(
       "id, slug, name, description, category, tags, recruiting_status, verified, target_years",
     )
     .in("id", clubIds);
 
-  if (error) {
-    throw new Error(error.message);
+  let data = primary.data;
+
+  if (primary.error) {
+    if (!isMissingSchemaColumn(primary.error, "target_years")) {
+      throw new Error(primary.error.message);
+    }
+
+    const fallback = await supabase
+      .from("clubs")
+      .select("id, slug, name, description, category, tags, recruiting_status, verified")
+      .in("id", clubIds);
+
+    if (fallback.error) {
+      throw new Error(fallback.error.message);
+    }
+
+    data = (fallback.data ?? []).map((club) => ({
+      ...club,
+      target_years: null,
+    }));
   }
 
   const order = new Map(clubIds.map((clubId, index) => [clubId, index]));
-  return (data ?? []).sort((a, b) => {
+  return (data ?? [])
+    .map((club) => ({
+      ...club,
+      target_years: normalizeTargetYears(club.target_years),
+    }))
+    .sort((a, b) => {
     return (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0);
   });
 }

@@ -65,6 +65,9 @@ const CONDITION_OPERATORS = [
   { value: "not_includes", label: "Does not include" },
 ];
 
+const INPUT_CLASS =
+  "rounded-control border border-border px-3 py-2 text-sm text-ink outline-none focus:border-brand-action focus:ring-1 focus:ring-brand-action";
+
 export default async function PortalFormsPage({
   params,
   searchParams,
@@ -94,22 +97,26 @@ export default async function PortalFormsPage({
 
   const sectionIds = (sectionsData ?? []).map((section) => section.id);
 
-  const { data: questionsData } = form && sectionIds.length > 0
-    ? await supabase
-        .from("club_application_form_questions")
-        .select(
-          "id, section_id, type, label, help_text, placeholder, is_required, position, condition_question_id, condition_operator, condition_value",
-        )
-        .in("section_id", sectionIds)
-        .order("position")
-    : { data: [] };
+  const { data: questionsData } =
+    form && sectionIds.length > 0
+      ? await supabase
+          .from("club_application_form_questions")
+          .select(
+            "id, section_id, type, label, help_text, placeholder, is_required, position, condition_question_id, condition_operator, condition_value",
+          )
+          .in("section_id", sectionIds)
+          .order("position")
+      : { data: [] };
 
   const { data: optionsData } =
     questionsData && questionsData.length > 0
       ? await supabase
           .from("club_application_form_options")
           .select("id, question_id, label, value, position")
-          .in("question_id", questionsData.map((question) => question.id))
+          .in(
+            "question_id",
+            questionsData.map((question) => question.id),
+          )
           .order("position")
       : { data: [] };
 
@@ -133,41 +140,55 @@ export default async function PortalFormsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      {/* Form settings card */}
+      <div className="rounded-card border border-border bg-white p-6 shadow-card">
         <div className="mb-5">
-          <h2 className="text-xl font-semibold text-slate-900">Native application form</h2>
-          <p className="mt-1 text-sm text-slate-500">
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="text-base font-semibold text-ink">Native application form</h2>
+            {form ? (
+              <span
+                className={`inline-flex items-center rounded-control px-2.5 py-0.5 text-xs font-medium ${
+                  form.status === "published"
+                    ? "bg-brand-oxblood-soft text-brand-oxblood"
+                    : "bg-slate-100 text-status-closed"
+                }`}
+              >
+                {form.status === "published" ? "Published" : "Draft"}
+              </span>
+            ) : null}
+          </div>
+          <p className="mt-1 text-sm text-ink-muted">
             Build the Rush-hosted form students see when this club uses native applications.
           </p>
         </div>
 
         {message ? (
-          <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          <div className="mb-4 rounded-control border border-brand-oxblood/20 bg-brand-oxblood-soft px-4 py-3 text-sm text-brand-oxblood">
             {message}
           </div>
         ) : null}
         {error ? (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <div className="mb-4 rounded-control border border-red-200 bg-red-50 px-4 py-3 text-sm text-status-rejected">
             {error}
           </div>
         ) : null}
 
         <form className="grid gap-4 lg:grid-cols-2">
           <div>
-            <label htmlFor="title" className="mb-1 block text-sm font-medium text-slate-700">
+            <label htmlFor="title" className="mb-1 block text-sm font-medium text-ink-muted">
               Form title
             </label>
             <input
               id="title"
               name="title"
               defaultValue={form?.title ?? "Application form"}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className={`w-full ${INPUT_CLASS}`}
             />
           </div>
           <div>
             <label
               htmlFor="submit_button_text"
-              className="mb-1 block text-sm font-medium text-slate-700"
+              className="mb-1 block text-sm font-medium text-ink-muted"
             >
               Submit button text
             </label>
@@ -175,13 +196,13 @@ export default async function PortalFormsPage({
               id="submit_button_text"
               name="submit_button_text"
               defaultValue={form?.submit_button_text ?? "Submit application"}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className={`w-full ${INPUT_CLASS}`}
             />
           </div>
           <div className="lg:col-span-2">
             <label
               htmlFor="description"
-              className="mb-1 block text-sm font-medium text-slate-700"
+              className="mb-1 block text-sm font-medium text-ink-muted"
             >
               Form description
             </label>
@@ -190,18 +211,18 @@ export default async function PortalFormsPage({
               name="description"
               rows={3}
               defaultValue={form?.description ?? ""}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className={`w-full ${INPUT_CLASS}`}
             />
           </div>
           <div>
-            <label htmlFor="status" className="mb-1 block text-sm font-medium text-slate-700">
+            <label htmlFor="status" className="mb-1 block text-sm font-medium text-ink-muted">
               Form status
             </label>
             <select
               id="status"
               name="status"
               defaultValue={form?.status ?? "draft"}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className={`w-full ${INPUT_CLASS}`}
             >
               <option value="draft">Draft</option>
               <option value="published">Published</option>
@@ -210,7 +231,7 @@ export default async function PortalFormsPage({
           <div className="lg:col-span-2">
             <button
               formAction={saveFormSettings.bind(null, slug)}
-              className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+              className="inline-flex items-center justify-center rounded-control bg-brand-action px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#1F2937]"
             >
               Save form settings
             </button>
@@ -220,29 +241,30 @@ export default async function PortalFormsPage({
 
       {!form ? null : (
         <>
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h3 className="text-lg font-semibold text-slate-900">Add section</h3>
-            <form className="mt-4 grid gap-4 lg:grid-cols-[1fr_1fr_120px_auto]">
+          {/* Add section */}
+          <div className="rounded-card border border-border bg-white p-5 shadow-card">
+            <h3 className="mb-4 text-sm font-semibold text-ink">Add section</h3>
+            <form className="grid gap-3 lg:grid-cols-[1fr_1fr_120px_auto]">
               <input type="hidden" name="form_id" value={form.id} />
               <input
                 name="title"
                 placeholder="Section title"
-                className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className={INPUT_CLASS}
               />
               <input
                 name="description"
                 placeholder="Section description"
-                className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className={INPUT_CLASS}
               />
               <input
                 name="position"
                 type="number"
                 defaultValue={sections.length}
-                className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className={INPUT_CLASS}
               />
               <button
                 formAction={addSection.bind(null, slug)}
-                className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                className="inline-flex items-center justify-center rounded-control border border-border bg-surface-cool px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-border"
               >
                 Add section
               </button>
@@ -253,36 +275,39 @@ export default async function PortalFormsPage({
             {sections.map((section) => {
               const sectionQuestions = questionsBySection.get(section.id) ?? [];
               return (
-                <div key={section.id} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                  <div className="flex flex-col gap-4 border-b border-slate-100 pb-5">
-                    <form className="grid gap-4 lg:grid-cols-[1fr_1fr_120px_auto_auto]">
+                <div
+                  key={section.id}
+                  className="rounded-card border border-border bg-white p-6 shadow-card"
+                >
+                  <div className="flex flex-col gap-4 border-b border-border pb-5">
+                    <form className="grid gap-3 lg:grid-cols-[1fr_1fr_120px_auto_auto]">
                       <input
                         name="title"
                         defaultValue={section.title}
-                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        className={INPUT_CLASS}
                       />
                       <input
                         name="description"
                         defaultValue={section.description ?? ""}
-                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        className={INPUT_CLASS}
                       />
                       <input
                         name="position"
                         type="number"
                         defaultValue={section.position}
-                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        className={INPUT_CLASS}
                       />
                       <button
                         formAction={updateSection.bind(null, slug, section.id)}
-                        className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                        className="inline-flex items-center justify-center rounded-control border border-border bg-surface-cool px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-border"
                       >
-                        Save section
+                        Save
                       </button>
                       <button
                         formAction={deleteSection.bind(null, slug, section.id)}
-                        className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-100"
+                        className="inline-flex items-center justify-center rounded-control border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-status-rejected transition-colors hover:bg-red-100"
                       >
-                        Delete section
+                        Delete
                       </button>
                     </form>
                   </div>
@@ -294,26 +319,29 @@ export default async function PortalFormsPage({
                         question.type === "single_select" || question.type === "multi_select";
 
                       return (
-                        <div key={question.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <div
+                          key={question.id}
+                          className="rounded-control border border-border bg-surface-cool p-4"
+                        >
                           <form className="grid gap-4 lg:grid-cols-2">
                             <div className="lg:col-span-2">
-                              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                              <label className="mb-1 block text-xs font-medium uppercase tracking-[0.12em] text-ink-muted">
                                 Question label
                               </label>
                               <input
                                 name="label"
                                 defaultValue={question.label}
-                                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                className={`w-full ${INPUT_CLASS}`}
                               />
                             </div>
                             <div>
-                              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                              <label className="mb-1 block text-xs font-medium uppercase tracking-[0.12em] text-ink-muted">
                                 Type
                               </label>
                               <select
                                 name="type"
                                 defaultValue={question.type}
-                                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                className={`w-full ${INPUT_CLASS}`}
                               >
                                 {QUESTION_TYPES.map((type) => (
                                   <option key={type} value={type}>
@@ -323,44 +351,44 @@ export default async function PortalFormsPage({
                               </select>
                             </div>
                             <div>
-                              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                              <label className="mb-1 block text-xs font-medium uppercase tracking-[0.12em] text-ink-muted">
                                 Position
                               </label>
                               <input
                                 name="position"
                                 type="number"
                                 defaultValue={question.position}
-                                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                className={`w-full ${INPUT_CLASS}`}
                               />
                             </div>
                             <div>
-                              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                              <label className="mb-1 block text-xs font-medium uppercase tracking-[0.12em] text-ink-muted">
                                 Help text
                               </label>
                               <input
                                 name="help_text"
                                 defaultValue={question.help_text ?? ""}
-                                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                className={`w-full ${INPUT_CLASS}`}
                               />
                             </div>
                             <div>
-                              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                              <label className="mb-1 block text-xs font-medium uppercase tracking-[0.12em] text-ink-muted">
                                 Placeholder
                               </label>
                               <input
                                 name="placeholder"
                                 defaultValue={question.placeholder ?? ""}
-                                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                className={`w-full ${INPUT_CLASS}`}
                               />
                             </div>
                             <div>
-                              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                              <label className="mb-1 block text-xs font-medium uppercase tracking-[0.12em] text-ink-muted">
                                 Condition question
                               </label>
                               <select
                                 name="condition_question_id"
                                 defaultValue={question.condition_question_id ?? ""}
-                                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                className={`w-full ${INPUT_CLASS}`}
                               >
                                 <option value="">Always visible</option>
                                 {questions
@@ -373,13 +401,13 @@ export default async function PortalFormsPage({
                               </select>
                             </div>
                             <div>
-                              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                              <label className="mb-1 block text-xs font-medium uppercase tracking-[0.12em] text-ink-muted">
                                 Condition operator
                               </label>
                               <select
                                 name="condition_operator"
                                 defaultValue={question.condition_operator ?? ""}
-                                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                className={`w-full ${INPUT_CLASS}`}
                               >
                                 {CONDITION_OPERATORS.map((operator) => (
                                   <option key={operator.value} value={operator.value}>
@@ -389,34 +417,34 @@ export default async function PortalFormsPage({
                               </select>
                             </div>
                             <div>
-                              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                              <label className="mb-1 block text-xs font-medium uppercase tracking-[0.12em] text-ink-muted">
                                 Condition value
                               </label>
                               <input
                                 name="condition_value"
                                 defaultValue={question.condition_value ?? ""}
-                                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                className={`w-full ${INPUT_CLASS}`}
                               />
                             </div>
-                            <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                            <label className="inline-flex items-center gap-2 text-sm text-ink">
                               <input
                                 name="is_required"
                                 type="checkbox"
                                 defaultChecked={question.is_required}
-                                className="rounded border-slate-300"
+                                className="rounded border-border"
                               />
                               Required
                             </label>
-                            <div className="lg:col-span-2 flex flex-wrap gap-3">
+                            <div className="flex flex-wrap gap-3 lg:col-span-2">
                               <button
                                 formAction={updateQuestion.bind(null, slug, question.id)}
-                                className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-white"
+                                className="inline-flex items-center justify-center rounded-control border border-border bg-white px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-surface-cool"
                               >
                                 Save question
                               </button>
                               <button
                                 formAction={deleteQuestion.bind(null, slug, question.id)}
-                                className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-100"
+                                className="inline-flex items-center justify-center rounded-control border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-status-rejected transition-colors hover:bg-red-100"
                               >
                                 Delete question
                               </button>
@@ -424,38 +452,41 @@ export default async function PortalFormsPage({
                           </form>
 
                           {supportsOptions ? (
-                            <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4">
-                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            <div className="mt-4 rounded-control border border-border bg-white p-4">
+                              <p className="text-xs font-medium uppercase tracking-[0.12em] text-ink-muted">
                                 Options
                               </p>
                               <div className="mt-3 flex flex-col gap-3">
                                 {questionOptions.map((option) => (
-                                  <form key={option.id} className="grid gap-3 lg:grid-cols-[1fr_1fr_120px_auto_auto]">
+                                  <form
+                                    key={option.id}
+                                    className="grid gap-3 lg:grid-cols-[1fr_1fr_120px_auto_auto]"
+                                  >
                                     <input
                                       name="label"
                                       defaultValue={option.label}
-                                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                      className={INPUT_CLASS}
                                     />
                                     <input
                                       name="value"
                                       defaultValue={option.value}
-                                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                      className={INPUT_CLASS}
                                     />
                                     <input
                                       name="position"
                                       type="number"
                                       defaultValue={option.position}
-                                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                      className={INPUT_CLASS}
                                     />
                                     <button
                                       formAction={updateOption.bind(null, slug, option.id)}
-                                      className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                                      className="inline-flex items-center justify-center rounded-control border border-border bg-surface-cool px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-border"
                                     >
                                       Save
                                     </button>
                                     <button
                                       formAction={deleteOption.bind(null, slug, option.id)}
-                                      className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-100"
+                                      className="inline-flex items-center justify-center rounded-control border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-status-rejected transition-colors hover:bg-red-100"
                                     >
                                       Delete
                                     </button>
@@ -467,22 +498,22 @@ export default async function PortalFormsPage({
                                 <input
                                   name="label"
                                   placeholder="Option label"
-                                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                  className={INPUT_CLASS}
                                 />
                                 <input
                                   name="value"
                                   placeholder="Option value"
-                                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                  className={INPUT_CLASS}
                                 />
                                 <input
                                   name="position"
                                   type="number"
                                   defaultValue={questionOptions.length}
-                                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                  className={INPUT_CLASS}
                                 />
                                 <button
                                   formAction={addOption.bind(null, slug, question.id)}
-                                  className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                                  className="inline-flex items-center justify-center rounded-control border border-border bg-surface-cool px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-border"
                                 >
                                   Add option
                                 </button>
@@ -493,18 +524,19 @@ export default async function PortalFormsPage({
                       );
                     })}
 
-                    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4">
-                      <h4 className="text-sm font-semibold text-slate-900">Add question</h4>
+                    {/* Add question */}
+                    <div className="rounded-control border border-dashed border-border bg-surface-cool p-4">
+                      <h4 className="text-sm font-semibold text-ink">Add question</h4>
                       <form className="mt-4 grid gap-3 lg:grid-cols-2">
                         <input
                           name="label"
                           placeholder="Why do you want to join?"
-                          className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                          className={INPUT_CLASS}
                         />
                         <select
                           name="type"
                           defaultValue="short_text"
-                          className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                          className={INPUT_CLASS}
                         >
                           {QUESTION_TYPES.map((type) => (
                             <option key={type} value={type}>
@@ -515,23 +547,23 @@ export default async function PortalFormsPage({
                         <input
                           name="help_text"
                           placeholder="Optional help text"
-                          className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                          className={INPUT_CLASS}
                         />
                         <input
                           name="placeholder"
                           placeholder="Optional placeholder"
-                          className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                          className={INPUT_CLASS}
                         />
                         <input
                           name="position"
                           type="number"
                           defaultValue={sectionQuestions.length}
-                          className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                          className={INPUT_CLASS}
                         />
                         <select
                           name="condition_question_id"
                           defaultValue=""
-                          className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                          className={INPUT_CLASS}
                         >
                           <option value="">Always visible</option>
                           {questions.map((question) => (
@@ -543,7 +575,7 @@ export default async function PortalFormsPage({
                         <select
                           name="condition_operator"
                           defaultValue=""
-                          className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                          className={INPUT_CLASS}
                         >
                           {CONDITION_OPERATORS.map((operator) => (
                             <option key={operator.value} value={operator.value}>
@@ -554,20 +586,20 @@ export default async function PortalFormsPage({
                         <input
                           name="condition_value"
                           placeholder="Condition value"
-                          className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                          className={INPUT_CLASS}
                         />
-                        <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                        <label className="inline-flex items-center gap-2 text-sm text-ink">
                           <input
                             name="is_required"
                             type="checkbox"
-                            className="rounded border-slate-300"
+                            className="rounded border-border"
                           />
                           Required
                         </label>
                         <div className="lg:col-span-2">
                           <button
                             formAction={addQuestion.bind(null, slug, section.id)}
-                            className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                            className="inline-flex items-center justify-center rounded-control bg-brand-action px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#1F2937]"
                           >
                             Add question
                           </button>

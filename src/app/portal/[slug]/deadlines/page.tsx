@@ -37,7 +37,7 @@ export default async function PortalDeadlinesPage({
         </p>
 
         {message ? (
-          <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+          <div className="mt-4 rounded-lg border border-brand-oxblood/20 bg-brand-oxblood-soft px-4 py-3 text-sm text-brand-oxblood">
             {message}
           </div>
         ) : null}
@@ -51,16 +51,16 @@ export default async function PortalDeadlinesPage({
           <input
             name="title"
             placeholder="Application deadline"
-            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-brand-action focus:ring-1 focus:ring-brand-action"
           />
           <input
             name="deadline_at"
             type="datetime-local"
-            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-brand-action focus:ring-1 focus:ring-brand-action"
           />
           <button
             formAction={createDeadline.bind(null, slug)}
-            className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+            className="inline-flex items-center justify-center rounded-lg bg-brand-action px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#1F2937]"
           >
             Add deadline
           </button>
@@ -80,13 +80,13 @@ export default async function PortalDeadlinesPage({
                   <input
                     name="title"
                     defaultValue={deadline.title}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-brand-action focus:ring-1 focus:ring-brand-action"
                   />
                   <input
                     name="deadline_at"
                     type="datetime-local"
                     defaultValue={deadline.deadline_at.slice(0, 16)}
-                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-brand-action focus:ring-1 focus:ring-brand-action"
                   />
                   <button
                     formAction={updateDeadline.bind(null, slug, deadline.id)}
@@ -99,7 +99,7 @@ export default async function PortalDeadlinesPage({
                     className={`inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                       deadline.is_active
                         ? "border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
-                        : "border border-green-200 bg-green-50 text-green-700 hover:bg-green-100"
+                        : "border border-brand-oxblood/20 bg-brand-oxblood-soft text-brand-oxblood hover:bg-[#efe3e4]"
                     }`}
                   >
                     {deadline.is_active ? "Archive" : "Restore"}

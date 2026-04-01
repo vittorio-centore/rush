@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 
@@ -25,6 +26,8 @@ const STATUSES = [
 export default function ClubFilters({ categories, tags, current }: Props) {
   const router = useRouter();
   const pathname = usePathname();
+  const [showFilters, setShowFilters] = useState(false);
+  const activeFilterCount = [current.category, current.status, current.tag].filter(Boolean).length;
   const visibleTags = current.tag
     ? Array.from(new Set([current.tag, ...tags])).slice(0, 24)
     : tags.slice(0, 24);
@@ -58,8 +61,19 @@ export default function ClubFilters({ categories, tags, current }: Props) {
     return current[key as keyof typeof current] === value;
   }
 
+  const hasActiveFilters = !!(current.category || current.status || current.tag || current.q);
+
   return (
-    <div className="mb-6 space-y-4">
+    <div className="space-y-5">
+      <div className="border-b border-border-warm pb-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">
+          Refine results
+        </p>
+        <p className="mt-2 text-sm leading-6 text-ink-muted">
+          Search by name, then narrow the directory by status, category, or tags.
+        </p>
+      </div>
+
       {/* Search */}
       <form
         onSubmit={(e) => {
@@ -67,17 +81,17 @@ export default function ClubFilters({ categories, tags, current }: Props) {
           const q = (e.currentTarget.elements.namedItem("q") as HTMLInputElement).value.trim();
           router.push(buildHref({ q: q || undefined }));
         }}
-        className="flex gap-3"
+        className="flex gap-2"
       >
         <input
           name="q"
           defaultValue={current.q ?? ""}
           placeholder="Search clubs…"
-          className="w-full max-w-sm rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          className="w-full rounded-control border border-border-warm bg-white px-3 py-2 text-sm text-ink placeholder:text-ink-muted outline-none focus:border-brand-action focus:ring-1 focus:ring-brand-action/30 transition-colors"
         />
         <button
           type="submit"
-          className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+          className="inline-flex items-center justify-center rounded-control bg-brand-action px-4 py-2 text-sm font-medium text-white hover:bg-[#1F2937] transition-colors"
         >
           Search
         </button>
@@ -85,90 +99,137 @@ export default function ClubFilters({ categories, tags, current }: Props) {
           <button
             type="button"
             onClick={() => router.push(buildHref({ q: undefined }))}
-            className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+            className="inline-flex items-center justify-center rounded-control border border-border-warm bg-white px-3 py-2 text-sm font-medium text-ink-muted hover:bg-surface-warm transition-colors"
           >
-            Clear
+            ✕
           </button>
         )}
       </form>
 
-      {/* Status filters */}
-      <div className="flex flex-wrap gap-2">
-        {STATUSES.map(({ value, label }) => (
-          <button
-            key={value}
-            onClick={() => toggle("status", value)}
-            className={
-              isActive("status", value)
-                ? "rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition-colors"
-                : "rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-            }
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* Category filters */}
-      {categories.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => toggle("category", cat)}
-              className={
-                isActive("category", cat)
-                  ? "rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition-colors"
-                  : "rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-              }
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Tag filters */}
-      {visibleTags.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Popular tags
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {visibleTags.map((tag) => (
-              <button
-                key={tag}
-                onClick={() => toggle("tag", tag)}
-                className={
-                  isActive("tag", tag)
-                    ? "rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 transition-colors"
-                    : "rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-                }
-              >
-                #{tag}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Active filters summary */}
-      {(current.category || current.status || current.tag || current.q) && (
-        <div className="flex items-center gap-2 text-xs text-slate-500">
-          <span>Filtered by:</span>
+      {/* Active filter pills */}
+      {hasActiveFilters && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-ink-muted">Active:</span>
           {current.q && (
-            <span className="rounded bg-slate-100 px-2 py-0.5">
-              &quot;{current.q}&quot;
-            </span>
+            <FilterPill label={`"${current.q}"`} onRemove={() => router.push(buildHref({ q: undefined }))} />
           )}
-          {current.status && <span className="rounded bg-slate-100 px-2 py-0.5">{current.status}</span>}
-          {current.category && <span className="rounded bg-slate-100 px-2 py-0.5">{current.category}</span>}
-          {current.tag && <span className="rounded bg-slate-100 px-2 py-0.5">#{current.tag}</span>}
-          <Link href="/clubs" className="ml-1 text-blue-600 text-xs">
+          {current.status && (
+            <FilterPill label={current.status} onRemove={() => router.push(buildHref({ status: undefined }))} />
+          )}
+          {current.category && (
+            <FilterPill label={current.category} onRemove={() => router.push(buildHref({ category: undefined }))} />
+          )}
+          {current.tag && (
+            <FilterPill label={`#${current.tag}`} onRemove={() => router.push(buildHref({ tag: undefined }))} />
+          )}
+          <Link href="/clubs" className="ml-1 text-xs font-medium text-brand-action hover:underline">
             Clear all
           </Link>
         </div>
       )}
+
+      {/* Mobile toggle */}
+      <div className="lg:hidden">
+        <button
+          type="button"
+          onClick={() => setShowFilters((prev) => !prev)}
+          className="inline-flex items-center gap-2 rounded-control border border-border-warm bg-surface-cool px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-white"
+        >
+          Filters{activeFilterCount > 0 ? ` · ${activeFilterCount} active` : ""}
+          <span aria-hidden="true">{showFilters ? "▲" : "▼"}</span>
+        </button>
+      </div>
+
+      {/* Filter groups */}
+      <div className={`space-y-5 ${showFilters ? "block" : "hidden lg:block"}`}>
+        {/* Recruiting status */}
+        <FilterGroup label="Recruiting status">
+          <div className="flex flex-wrap gap-2">
+            {STATUSES.map(({ value, label }) => (
+              <button
+                key={value}
+                onClick={() => toggle("status", value)}
+                className={
+                  isActive("status", value)
+                    ? "rounded-control border border-brand-action/30 bg-brand-action/10 px-3 py-1.5 text-xs font-medium text-brand-action transition-colors"
+                    : "rounded-control border border-border-warm bg-white px-3 py-1.5 text-xs font-medium text-ink-muted hover:border-border hover:text-ink transition-colors"
+                }
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </FilterGroup>
+
+        {/* Category */}
+        {categories.length > 0 && (
+          <FilterGroup label="Category">
+            <div className="flex flex-wrap gap-2">
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => toggle("category", cat)}
+                  className={
+                    isActive("category", cat)
+                      ? "rounded-control border border-brand-action/30 bg-brand-action/10 px-3 py-1.5 text-xs font-medium text-brand-action transition-colors"
+                      : "rounded-control border border-border-warm bg-white px-3 py-1.5 text-xs font-medium text-ink-muted hover:border-border hover:text-ink transition-colors"
+                  }
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </FilterGroup>
+        )}
+
+        {/* Tags */}
+        {visibleTags.length > 0 && (
+          <FilterGroup label="Popular tags">
+            <div className="flex flex-wrap gap-2">
+              {visibleTags.map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => toggle("tag", tag)}
+                  className={
+                    isActive("tag", tag)
+                      ? "rounded-full border border-brand-action/30 bg-brand-action/10 px-3 py-1 text-xs font-medium text-brand-action transition-colors"
+                      : "rounded-full border border-border-warm bg-white px-3 py-1 text-xs font-medium text-ink-muted hover:border-border hover:text-ink transition-colors"
+                  }
+                >
+                  #{tag}
+                </button>
+              ))}
+            </div>
+          </FilterGroup>
+        )}
+      </div>
     </div>
+  );
+}
+
+/* ── Sub-components ────────────────────────────────────────────── */
+
+function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-muted">{label}</p>
+      {children}
+    </div>
+  );
+}
+
+function FilterPill({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-control border border-brand-action/20 bg-brand-action/8 px-2.5 py-1 text-xs font-medium text-brand-action">
+      {label}
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={`Remove filter ${label}`}
+        className="ml-0.5 rounded-full hover:bg-brand-action/15 transition-colors p-0.5"
+      >
+        ✕
+      </button>
+    </span>
   );
 }
