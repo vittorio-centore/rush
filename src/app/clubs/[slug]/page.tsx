@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { addApplication } from "@/app/dashboard/applications/actions";
 import { TrackedAnchor, TrackedLink } from "@/components/TrackedLink";
 import SiteHeader from "@/components/SiteHeader";
 import { insertEvent } from "@/lib/events";
@@ -13,6 +12,7 @@ import {
 } from "@/lib/supabase/compat";
 import { createClient } from "@/lib/supabase/server";
 import FollowButton from "./FollowButton";
+import { followClub } from "./actions";
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -66,7 +66,7 @@ const APP_MODE_LABELS: Record<string, string> = {
 };
 
 const TRACKER_STATUS_LABELS: Record<string, string> = {
-  interested: "Planning",
+  interested: "Saved",
   applied: "Applied",
   interview: "Interview",
   decision: "Decision",
@@ -717,8 +717,7 @@ export default async function ClubPage({ params, searchParams }: Props) {
               ) : (
                 <div className="space-y-4">
                   <p className="text-sm text-ink-muted">
-                    Save this club into your personal tracker so deadlines,
-                    notes, and application progress live in one place.
+                    Save this club while you decide. It should stay in your saved list until you actually apply.
                   </p>
 
                   {/* Disabled apply button when recruiting is closed */}
@@ -730,20 +729,28 @@ export default async function ClubPage({ params, searchParams }: Props) {
                     </div>
                   )}
 
-                  <form>
-                    <input type="hidden" name="club_id" value={club.id} />
-                    <input
-                      type="hidden"
-                      name="redirect_to"
-                      value={`/clubs/${slug}`}
-                    />
-                    <button
-                      formAction={addApplication}
-                      className="inline-flex w-full items-center justify-center rounded-control bg-brand-action px-4 py-2.5 text-sm font-medium text-white hover:bg-[#1F2937] transition-colors"
-                    >
-                      Add to tracker
-                    </button>
-                  </form>
+                  {isFollowing ? (
+                    <div className="rounded-card border border-border-warm bg-surface-cool p-4">
+                      <p className="text-sm text-ink-muted">
+                        This club is already in your saved list. Once you apply, it will belong in your application tracker.
+                      </p>
+                      <Link
+                        href="/dashboard/follows"
+                        className="mt-3 inline-flex items-center text-sm font-medium text-brand-oxblood transition-colors hover:text-ink"
+                      >
+                        Open saved clubs →
+                      </Link>
+                    </div>
+                  ) : (
+                    <form>
+                      <button
+                        formAction={followClub.bind(null, club.id)}
+                        className="inline-flex w-full items-center justify-center rounded-control bg-brand-action px-4 py-2.5 text-sm font-medium text-white hover:bg-[#1F2937] transition-colors"
+                      >
+                        Save club
+                      </button>
+                    </form>
+                  )}
 
                   {isNativeApplication && isRecruiting ? (
                     <TrackedLink

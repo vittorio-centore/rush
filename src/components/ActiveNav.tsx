@@ -16,13 +16,17 @@ type Props = {
   inactiveItemClassName: string;
 };
 
-function isActivePath(pathname: string, href: string) {
-  // Exact-match only routes: root and any path that has no sub-routes in the nav
-  if (href === "/" || href === "/dashboard") {
-    return pathname === href;
+function getActiveHref(pathname: string, links: NavLink[]) {
+  const exactMatch = links.find((link) => pathname === link.href);
+  if (exactMatch) {
+    return exactMatch.href;
   }
 
-  return pathname === href || pathname.startsWith(`${href}/`);
+  const prefixMatches = links
+    .filter((link) => pathname.startsWith(`${link.href}/`))
+    .sort((left, right) => right.href.length - left.href.length);
+
+  return prefixMatches[0]?.href ?? null;
 }
 
 export default function ActiveNav({
@@ -33,16 +37,18 @@ export default function ActiveNav({
   inactiveItemClassName,
 }: Props) {
   const pathname = usePathname();
+  const activeHref = getActiveHref(pathname, links);
 
   return (
     <nav className={containerClassName}>
       {links.map((link) => {
-        const active = isActivePath(pathname, link.href);
+        const active = activeHref === link.href;
 
         return (
           <Link
             key={link.href}
             href={link.href}
+            aria-current={active ? "page" : undefined}
             className={`${baseItemClassName} ${active ? activeItemClassName : inactiveItemClassName}`}
           >
             {link.label}

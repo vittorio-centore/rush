@@ -3,6 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import {
+  getPortalCapabilities,
+  getPortalFeatureUnavailableMessage,
+} from "@/lib/portal-features";
 import { requirePortalAdmin } from "@/lib/portal";
 
 const VALID_QUESTION_TYPES = [
@@ -34,6 +38,18 @@ function revalidateFormPaths(slug: string) {
   revalidatePath(`/portal/${slug}/forms`);
   revalidatePath(`/clubs/${slug}/apply`);
   revalidatePath(`/clubs/${slug}`);
+}
+
+async function ensureFormBuilder(slug: string) {
+  const capabilities = await getPortalCapabilities(slug);
+
+  if (!capabilities.formBuilder) {
+    redirect(
+      `/portal/${slug}/forms?error=${encodeURIComponent(
+        getPortalFeatureUnavailableMessage("formBuilder"),
+      )}`,
+    );
+  }
 }
 
 async function getPublishValidationError(
@@ -127,6 +143,7 @@ function validateCondition(
 }
 
 export async function saveFormSettings(slug: string, formData: FormData) {
+  await ensureFormBuilder(slug);
   const { supabase, club } = await requirePortalAdmin(slug);
 
   const title = getString(formData, "title") || "Application form";
@@ -177,6 +194,7 @@ export async function saveFormSettings(slug: string, formData: FormData) {
 }
 
 export async function addSection(slug: string, formData: FormData) {
+  await ensureFormBuilder(slug);
   const { supabase } = await requirePortalAdmin(slug);
 
   const formId = getString(formData, "form_id");
@@ -204,6 +222,7 @@ export async function addSection(slug: string, formData: FormData) {
 }
 
 export async function updateSection(slug: string, sectionId: string, formData: FormData) {
+  await ensureFormBuilder(slug);
   const { supabase } = await requirePortalAdmin(slug);
 
   const title = getString(formData, "title");
@@ -233,6 +252,7 @@ export async function updateSection(slug: string, sectionId: string, formData: F
 }
 
 export async function deleteSection(slug: string, sectionId: string) {
+  await ensureFormBuilder(slug);
   const { supabase } = await requirePortalAdmin(slug);
 
   const { error } = await supabase
@@ -249,6 +269,7 @@ export async function deleteSection(slug: string, sectionId: string) {
 }
 
 export async function addQuestion(slug: string, sectionId: string, formData: FormData) {
+  await ensureFormBuilder(slug);
   const { supabase } = await requirePortalAdmin(slug);
 
   const type = getString(formData, "type");
@@ -301,6 +322,7 @@ export async function addQuestion(slug: string, sectionId: string, formData: For
 }
 
 export async function updateQuestion(slug: string, questionId: string, formData: FormData) {
+  await ensureFormBuilder(slug);
   const { supabase } = await requirePortalAdmin(slug);
 
   const type = getString(formData, "type");
@@ -356,6 +378,7 @@ export async function updateQuestion(slug: string, questionId: string, formData:
 }
 
 export async function deleteQuestion(slug: string, questionId: string) {
+  await ensureFormBuilder(slug);
   const { supabase } = await requirePortalAdmin(slug);
 
   const { error } = await supabase
@@ -372,6 +395,7 @@ export async function deleteQuestion(slug: string, questionId: string) {
 }
 
 export async function addOption(slug: string, questionId: string, formData: FormData) {
+  await ensureFormBuilder(slug);
   const { supabase } = await requirePortalAdmin(slug);
 
   const label = getString(formData, "label");
@@ -398,6 +422,7 @@ export async function addOption(slug: string, questionId: string, formData: Form
 }
 
 export async function updateOption(slug: string, optionId: string, formData: FormData) {
+  await ensureFormBuilder(slug);
   const { supabase } = await requirePortalAdmin(slug);
 
   const label = getString(formData, "label");
@@ -427,6 +452,7 @@ export async function updateOption(slug: string, optionId: string, formData: For
 }
 
 export async function deleteOption(slug: string, optionId: string) {
+  await ensureFormBuilder(slug);
   const { supabase } = await requirePortalAdmin(slug);
 
   const { error } = await supabase

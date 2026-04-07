@@ -38,17 +38,17 @@ export default function LandingExperience({
                 Rush
               </p>
               <p className="mt-4 text-xs font-semibold uppercase tracking-[0.24em] text-brand-oxblood">
-                Spring 2026 recruiting at Michigan
+                University of Michigan club recruiting
               </p>
               <h1
                 className="mt-4 max-w-3xl text-[clamp(2.8rem,6vw,5.4rem)] font-semibold leading-[0.94] tracking-[-0.055em] text-ink"
                 style={{ fontFamily: "var(--font-display)" }}
               >
-                The calmer way to find clubs and track every application.
+                Find clubs, track applications, and manage recruiting in one place.
               </h1>
               <div className="mt-5 max-w-lg text-base leading-7 text-ink-muted sm:text-lg sm:leading-8">
                 <Balancer>
-                  Browse real organization pages, catch deadlines before they slip, and keep your entire rush season in one place.
+                  Browse club pages, stay on top of deadlines, and keep your recruiting process organized from start to finish.
                 </Balancer>
               </div>
 
@@ -87,7 +87,7 @@ export default function LandingExperience({
                       1,800+
                     </p>
                     <p className="mt-2 max-w-[16rem] text-sm leading-6 text-ink-muted">
-                      Organizations, deadlines, and follow-up actions pulled into one clean flow.
+                      Clubs, deadlines, and next steps in one organized workspace.
                     </p>
                   </div>
                   <div className="rounded-full border border-border-warm bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-oxblood">
@@ -100,13 +100,13 @@ export default function LandingExperience({
                     What students can do here
                   </p>
                   <p className="mt-3 text-2xl leading-tight text-ink">
-                    Start with the directory, not a shortlist chosen for you.
+                    Start with a complete directory and build your own shortlist.
                   </p>
                   <div className="mt-5 grid gap-3">
                     {[
-                      ["Search the directory", "Browse every listed organization without homepage favoritism."],
-                      ["Compare timelines", "See which clubs are open, rolling, or still worth following."],
-                      ["Track your process", "Keep deadlines, notes, and applications in one place."],
+                      ["Browse clubs", "Review every listed organization in one directory."],
+                      ["Check recruiting status", "See which clubs are open, rolling, or closed."],
+                      ["Track applications", "Keep notes, deadlines, and status updates together."],
                     ].map(([title, summary], index) => (
                       <motion.div
                         key={title}
@@ -140,30 +140,30 @@ export default function LandingExperience({
                 Choose your entry
               </p>
               <h2 className="mt-4 text-4xl leading-tight tracking-[-0.04em] text-ink">
-                Clear paths for both sides of recruiting.
+                Clear paths for students and club teams.
               </h2>
               <p className="mt-4 max-w-sm text-sm leading-7 text-ink-muted">
-                Rush works best when the first action is obvious. Students should reach the directory fast. Club officers should get straight to publishing and review.
+                Students should be able to browse quickly. Club officers should be able to publish information and review applicants without extra overhead.
               </p>
             </div>
 
             <div className="grid gap-8 border-t border-border-warm pt-8 lg:grid-cols-2 lg:border-t-0 lg:pt-0">
               <PathColumn
                 eyebrow="For students"
-                title="Find the right club without tab chaos."
-                body="Search the directory, compare what is open, and keep next steps organized."
+                title="Find the right club without losing track of the process."
+                body="Browse the directory, compare opportunities, and keep your application plan organized."
                 href="/clubs"
-                cta="Explore the directory"
-                points={["Browse categories", "Check active recruiting", "Track every application"]}
+                cta="Browse the directory"
+                points={["Browse categories", "Check recruiting status", "Track your applications"]}
                   accent="light"
               />
               <PathColumn
                 eyebrow="For club officers"
-                title="Run recruiting in one quieter workspace."
-                body="Claim your page, publish deadlines, and review applicants without juggling disconnected tools."
+                title="Run recruiting in one shared workspace."
+                body="Claim your page, publish updates, and review applicants from one admin surface."
                 href="/auth?tab=recruiter"
-                cta="Open officer setup"
-                points={["Claim your page", "Publish timeline updates", "Manage applicant flow"]}
+                cta="Open club setup"
+                points={["Claim your club page", "Publish deadlines", "Review applicants"]}
                 accent="dark"
               />
             </div>
@@ -178,7 +178,7 @@ export default function LandingExperience({
                   Browse faster
                 </p>
                 <h2 className="mt-3 text-4xl leading-tight tracking-[-0.04em] text-ink">
-                  Start with the categories students actually scan first.
+                  Start with the categories students use most.
                 </h2>
               </div>
               <Link href="/clubs" className="text-sm font-medium text-brand-oxblood transition-colors hover:text-ink">
@@ -212,7 +212,7 @@ export default function LandingExperience({
                           {category}
                         </h3>
                         <p className="mt-3 text-sm leading-7 text-ink-muted">
-                          Browse organizations grouped under this part of campus life.
+                          Browse clubs grouped by this area of campus life.
                         </p>
                       </div>
 
@@ -240,10 +240,10 @@ export default function LandingExperience({
                   Ready to start
                 </p>
                 <h2 className="mt-3 text-4xl leading-tight tracking-[-0.04em] text-ink">
-                  Keep your whole recruiting season legible from day one.
+                  Keep recruiting clear from day one.
                 </h2>
                 <p className="mt-3 text-sm leading-7 text-ink-muted">
-                  Browse the directory first, then sign in when you want tracking or the club-side workspace.
+                  Start with the directory, then sign in when you want tracking or club-side tools.
                 </p>
               </div>
               <div className="flex flex-col gap-3 sm:flex-row">

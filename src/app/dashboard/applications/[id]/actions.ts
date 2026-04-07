@@ -10,7 +10,7 @@ function getString(formData: FormData, key: string) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-const VALID_STATUSES = ["interested", "applied", "interview", "decision"] as const;
+const VALID_STATUSES = ["applied", "interview", "decision"] as const;
 type ApplicationStatus = (typeof VALID_STATUSES)[number];
 
 function isValidStatus(value: string): value is ApplicationStatus {

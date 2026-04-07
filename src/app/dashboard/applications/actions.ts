@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { insertEvent } from "@/lib/events";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 
 function getString(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -28,6 +29,7 @@ function buildRedirect(basePath: string, message?: string, error?: string) {
 
 export async function addApplication(formData: FormData) {
   const supabase = await createClient();
+  const serviceSupabase = createServiceClient();
   const { data } = await supabase.auth.getUser();
 
   if (!data.user) {
@@ -41,7 +43,7 @@ export async function addApplication(formData: FormData) {
     redirect(buildRedirect(redirectTo, undefined, "Please select a club."));
   }
 
-  const { error } = await supabase.from("user_applications").insert({
+  const { error } = await serviceSupabase.from("user_applications").insert({
     user_id: data.user.id,
     club_id: clubId,
     status: "interested",
@@ -54,7 +56,7 @@ export async function addApplication(formData: FormData) {
   }
 
   if (!error) {
-    await insertEvent(supabase, {
+    await insertEvent(serviceSupabase, {
       userId: data.user.id,
       clubId,
       eventType: "apply_add",
@@ -80,6 +82,7 @@ export async function addApplication(formData: FormData) {
 
 export async function deleteApplication(formData: FormData) {
   const supabase = await createClient();
+  const serviceSupabase = createServiceClient();
   const { data } = await supabase.auth.getUser();
 
   if (!data.user) {
@@ -92,7 +95,7 @@ export async function deleteApplication(formData: FormData) {
     redirect("/dashboard/applications?error=Missing application ID.");
   }
 
-  const { error } = await supabase
+  const { error } = await serviceSupabase
     .from("user_applications")
     .delete()
     .eq("id", applicationId)

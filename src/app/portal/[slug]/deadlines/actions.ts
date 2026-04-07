@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { requirePortalAdmin } from "@/lib/portal";
+import { isMissingSchemaColumn } from "@/lib/supabase/compat";
+import { createServiceClient } from "@/lib/supabase/service";
 
 function getString(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -11,7 +13,8 @@ function getString(formData: FormData, key: string) {
 }
 
 export async function createDeadline(slug: string, formData: FormData) {
-  const { supabase, club } = await requirePortalAdmin(slug);
+  const { club } = await requirePortalAdmin(slug);
+  const supabase = createServiceClient();
 
   const title = getString(formData, "title");
   const deadlineAt = getString(formData, "deadline_at");
@@ -38,7 +41,8 @@ export async function createDeadline(slug: string, formData: FormData) {
 }
 
 export async function updateDeadline(slug: string, deadlineId: string, formData: FormData) {
-  const { supabase, club } = await requirePortalAdmin(slug);
+  const { club } = await requirePortalAdmin(slug);
+  const supabase = createServiceClient();
 
   const title = getString(formData, "title");
   const deadlineAt = getString(formData, "deadline_at");
@@ -47,7 +51,7 @@ export async function updateDeadline(slug: string, deadlineId: string, formData:
     redirect(`/portal/${slug}/deadlines?error=Title+and+deadline+are+required.`);
   }
 
-  const { error } = await supabase
+  let { error } = await supabase
     .from("club_deadlines")
     .update({
       title,
@@ -56,6 +60,17 @@ export async function updateDeadline(slug: string, deadlineId: string, formData:
     })
     .eq("id", deadlineId)
     .eq("club_id", club.id);
+
+  if (error && isMissingSchemaColumn(error, "updated_at")) {
+    ({ error } = await supabase
+      .from("club_deadlines")
+      .update({
+        title,
+        deadline_at: deadlineAt,
+      })
+      .eq("id", deadlineId)
+      .eq("club_id", club.id));
+  }
 
   if (error) {
     redirect(`/portal/${slug}/deadlines?error=${encodeURIComponent(error.message)}`);
@@ -68,9 +83,10 @@ export async function updateDeadline(slug: string, deadlineId: string, formData:
 }
 
 export async function toggleDeadline(slug: string, deadlineId: string, isActive: boolean) {
-  const { supabase, club } = await requirePortalAdmin(slug);
+  const { club } = await requirePortalAdmin(slug);
+  const supabase = createServiceClient();
 
-  const { error } = await supabase
+  let { error } = await supabase
     .from("club_deadlines")
     .update({
       is_active: !isActive,
@@ -78,6 +94,16 @@ export async function toggleDeadline(slug: string, deadlineId: string, isActive:
     })
     .eq("id", deadlineId)
     .eq("club_id", club.id);
+
+  if (error && isMissingSchemaColumn(error, "updated_at")) {
+    ({ error } = await supabase
+      .from("club_deadlines")
+      .update({
+        is_active: !isActive,
+      })
+      .eq("id", deadlineId)
+      .eq("club_id", club.id));
+  }
 
   if (error) {
     redirect(`/portal/${slug}/deadlines?error=${encodeURIComponent(error.message)}`);

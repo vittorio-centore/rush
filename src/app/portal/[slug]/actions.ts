@@ -3,6 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import {
+  getPortalCapabilities,
+  getPortalFeatureUnavailableMessage,
+} from "@/lib/portal-features";
 import { getPortalContext } from "@/lib/portal";
 
 const VALID_STATUSES = ["interested", "applied", "interview", "decision"] as const;
@@ -30,6 +34,7 @@ function buildRedirectTarget(basePath: string, message?: string, error?: string)
 
 export async function bulkUpdateApplicants(slug: string, formData: FormData) {
   const { supabase, club, membership } = await getPortalContext(slug);
+  const capabilities = await getPortalCapabilities(slug);
 
   if (membership.role !== "admin") {
     redirect(`/portal/${slug}`);
@@ -54,6 +59,16 @@ export async function bulkUpdateApplicants(slug: string, formData: FormData) {
 
   if (applicationIds.length === 0) {
     redirect(buildRedirectTarget(redirectTo, undefined, "Select at least one applicant."));
+  }
+
+  if ((stageId || decisionLabelId) && !capabilities.decisionWorkspace) {
+    redirect(
+      buildRedirectTarget(
+        redirectTo,
+        undefined,
+        getPortalFeatureUnavailableMessage("decisionWorkspace"),
+      ),
+    );
   }
 
   const updatePayload: Record<string, unknown> = {

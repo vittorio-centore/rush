@@ -192,6 +192,7 @@ h3 { font-size: 1.25rem;  line-height: 1.4; }
 .portal-surface h2,
 .portal-surface h3 {
   font-family: var(--font-body);
+  color: inherit;
 }
 
 /* Focus ring — accessible, on-brand */

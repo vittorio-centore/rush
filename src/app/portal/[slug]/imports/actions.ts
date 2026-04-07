@@ -3,6 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import {
+  getPortalCapabilities,
+  getPortalFeatureUnavailableMessage,
+} from "@/lib/portal-features";
 import { requirePortalAdmin } from "@/lib/portal";
 import { parseCsv } from "@/lib/csv";
 
@@ -87,6 +91,16 @@ function importPriority(application: ExistingApplication) {
 }
 
 export async function importApplicants(slug: string, formData: FormData) {
+  const capabilities = await getPortalCapabilities(slug);
+
+  if (!capabilities.imports) {
+    redirect(
+      `/portal/${slug}/imports?error=${encodeURIComponent(
+        getPortalFeatureUnavailableMessage("imports"),
+      )}`,
+    );
+  }
+
   const { supabase, club, user } = await requirePortalAdmin(slug);
   const file = formData.get("file");
 

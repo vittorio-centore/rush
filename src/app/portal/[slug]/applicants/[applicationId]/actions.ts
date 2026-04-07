@@ -3,10 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import {
+  getPortalCapabilities,
+  getPortalFeatureUnavailableMessage,
+} from "@/lib/portal-features";
 import { getPortalContext } from "@/lib/portal";
+import { isMissingSchemaTable } from "@/lib/supabase/compat";
 
 const VALID_STATUSES = ["interested", "applied", "interview", "decision"] as const;
 const VALID_DECISION_STATUSES = ["pending", "accepted", "rejected", "waitlisted"] as const;
+const VALID_FLAG_STATUSES = ["neutral", "green", "red"] as const;
 
 type ApplicationStatus = (typeof VALID_STATUSES)[number];
 type DecisionStatus = (typeof VALID_DECISION_STATUSES)[number];
@@ -21,12 +27,83 @@ function getScore(formData: FormData, key: string) {
   return Number.isFinite(value) ? value : 0;
 }
 
+export async function saveApplicantMemberNote(
+  slug: string,
+  applicationId: string,
+  formData: FormData,
+) {
+  const { supabase, club, membership, user } = await getPortalContext(slug);
+
+  if (!["admin", "reviewer", "member"].includes(membership.role)) {
+    redirect(`/portal/${slug}`);
+  }
+
+  const flagStatus = getString(formData, "flag_status");
+  const noteText = getString(formData, "note_text");
+  const isAnonymous = getString(formData, "is_anonymous") === "on";
+
+  if (!VALID_FLAG_STATUSES.includes(flagStatus as (typeof VALID_FLAG_STATUSES)[number])) {
+    redirect(`/portal/${slug}/applicants/${applicationId}?error=Choose+a+valid+flag.`);
+  }
+
+  const { data: application } = await supabase
+    .from("user_applications")
+    .select("id")
+    .eq("id", applicationId)
+    .eq("club_id", club.id)
+    .maybeSingle();
+
+  if (!application) {
+    redirect(`/portal/${slug}/applicants/${applicationId}?error=Applicant+not+found+for+this+club.`);
+  }
+
+  if (!noteText && flagStatus === "neutral") {
+    const { error } = await supabase
+      .from("club_application_member_notes")
+      .delete()
+      .eq("application_id", applicationId)
+      .eq("author_user_id", user.id);
+
+    if (error && !isMissingSchemaTable(error, "club_application_member_notes")) {
+      redirect(`/portal/${slug}/applicants/${applicationId}?error=${encodeURIComponent(error.message)}`);
+    }
+
+    revalidatePath(`/portal/${slug}`);
+    revalidatePath(`/portal/${slug}/applicants/${applicationId}`);
+    redirect(`/portal/${slug}/applicants/${applicationId}?message=Club+note+cleared.`);
+  }
+
+  const { error } = await supabase
+    .from("club_application_member_notes")
+    .upsert(
+      {
+        club_id: club.id,
+        application_id: applicationId,
+        author_user_id: user.id,
+        flag_status: flagStatus,
+        note_text: noteText || null,
+        is_anonymous: isAnonymous,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "application_id,author_user_id" },
+    );
+
+  if (error) {
+    redirect(`/portal/${slug}/applicants/${applicationId}?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath(`/portal/${slug}`);
+  revalidatePath(`/portal/${slug}/applicants/${applicationId}`);
+  redirect(`/portal/${slug}/applicants/${applicationId}?message=Club+note+saved.`);
+}
+
 export async function updateApplicantStatus(
   slug: string,
   applicationId: string,
   formData: FormData,
 ) {
   const { supabase, club, membership } = await getPortalContext(slug);
+  const capabilities = await getPortalCapabilities(slug);
 
   if (membership.role !== "admin") {
     redirect(`/portal/${slug}`);
@@ -37,6 +114,14 @@ export async function updateApplicantStatus(
   const rawStatus = formData.get("status");
   const rawDecisionStatus = formData.get("decision_status");
   const notes = getString(formData, "notes");
+
+  if ((rawStageId || rawDecisionLabelId) && !capabilities.decisionWorkspace) {
+    redirect(
+      `/portal/${slug}/applicants/${applicationId}?error=${encodeURIComponent(
+        getPortalFeatureUnavailableMessage("decisionWorkspace"),
+      )}`,
+    );
+  }
 
   let status: ApplicationStatus | null = null;
   let stageId: string | null = null;
@@ -123,6 +208,15 @@ export async function assignReviewer(
   formData: FormData,
 ) {
   const { supabase, club, membership, user } = await getPortalContext(slug);
+  const capabilities = await getPortalCapabilities(slug);
+
+  if (!capabilities.reviewerTools) {
+    redirect(
+      `/portal/${slug}/applicants/${applicationId}?error=${encodeURIComponent(
+        getPortalFeatureUnavailableMessage("reviewerTools"),
+      )}`,
+    );
+  }
 
   if (membership.role !== "admin") {
     redirect(`/portal/${slug}`);
@@ -179,6 +273,15 @@ export async function unassignReviewer(
   assignmentId: string,
 ) {
   const { supabase, membership } = await getPortalContext(slug);
+  const capabilities = await getPortalCapabilities(slug);
+
+  if (!capabilities.reviewerTools) {
+    redirect(
+      `/portal/${slug}/applicants/${applicationId}?error=${encodeURIComponent(
+        getPortalFeatureUnavailableMessage("reviewerTools"),
+      )}`,
+    );
+  }
 
   if (membership.role !== "admin") {
     redirect(`/portal/${slug}`);
@@ -211,6 +314,15 @@ export async function saveReviewerScorecard(
   formData: FormData,
 ) {
   const { supabase, club, membership, user } = await getPortalContext(slug);
+  const capabilities = await getPortalCapabilities(slug);
+
+  if (!capabilities.reviewerTools) {
+    redirect(
+      `/portal/${slug}/applicants/${applicationId}?error=${encodeURIComponent(
+        getPortalFeatureUnavailableMessage("reviewerTools"),
+      )}`,
+    );
+  }
 
   const { data: application } = await supabase
     .from("user_applications")

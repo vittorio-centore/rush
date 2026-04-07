@@ -57,7 +57,19 @@ export async function unfollowClub(clubId: string) {
     return;
   }
 
-  if ((removedRows ?? []).length > 0) {
+  const { data: removedPlanningRows, error: planningDeleteError } = await supabase
+    .from("user_applications")
+    .delete()
+    .select("id")
+    .eq("user_id", data.user.id)
+    .eq("club_id", clubId)
+    .eq("status", "interested");
+
+  if (planningDeleteError) {
+    console.error("unfollowClub planning cleanup failed:", planningDeleteError.message);
+  }
+
+  if ((removedRows ?? []).length > 0 || (removedPlanningRows ?? []).length > 0) {
     await insertEvent(supabase, {
       userId: data.user.id,
       clubId,
@@ -69,4 +81,5 @@ export async function unfollowClub(clubId: string) {
   revalidatePath("/clubs/[slug]", "page");
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/follows");
+  revalidatePath("/dashboard/applications");
 }

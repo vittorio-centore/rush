@@ -36,17 +36,17 @@ function getClub(app: Application): Club | null {
   return Array.isArray(app.clubs) ? app.clubs[0] ?? null : app.clubs;
 }
 
-const STATUS_FLOW = ["interested", "applied", "interview", "decision"] as const;
+const STATUS_FLOW = ["applied", "interview", "decision"] as const;
 
 const STATUS_LABELS: Record<ApplicationStatus, string> = {
-  interested: "Planning",
+  interested: "Saved",
   applied: "Applied",
   interview: "Interview",
   decision: "Decision",
 };
 
 const STATUS_COPY: Record<ApplicationStatus, string> = {
-  interested: "Actively planning your next move",
+  interested: "Saved before applying",
   applied: "Application submitted",
   interview: "Interview process",
   decision: "Final outcome",
@@ -130,6 +130,11 @@ export default async function ApplicationDetailPage({
   }
 
   const app = application as Application;
+  if (app.status === "interested") {
+    redirect(
+      "/dashboard/follows?message=Clubs+you+have+not+applied+to+yet+now+live+in+Saved+clubs.",
+    );
+  }
   const club = getClub(app);
   const currentStageIndex = STATUS_FLOW.indexOf(app.status);
   const updatedLabel = formatLongDate(app.updated_at ?? app.created_at);
@@ -153,7 +158,7 @@ export default async function ApplicationDetailPage({
               {club?.name ?? "Unknown club"}
             </h1>
             <p className="mt-4 max-w-2xl text-base leading-8 text-ink-muted">
-              Keep your stage, notes, and draft work in one place so the next move is obvious when recruiting picks up.
+              Keep your application stage, notes, and draft work in one place once the process is active.
             </p>
 
             <div className="mt-5 flex flex-wrap gap-2">
@@ -200,7 +205,7 @@ export default async function ApplicationDetailPage({
           <SectionBlock
             eyebrow="Stage"
             title="Where this application stands"
-            description="Use Planning for clubs you are actively preparing for. Decision stays inactive until the application reaches the final step."
+            description="Use the tracker only for active applications. Decision stays inactive until the process reaches the final step."
           >
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Status" htmlFor="status">

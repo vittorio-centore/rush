@@ -6,8 +6,9 @@ import {
   normalizeApplicationSource,
 } from "@/lib/supabase/compat";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 
-import { addApplication, deleteApplication } from "./actions";
+import { deleteApplication } from "./actions";
 
 type ApplicationStatus = "interested" | "applied" | "interview" | "decision";
 type DecisionStatus = "pending" | "accepted" | "rejected" | "waitlisted";
@@ -35,7 +36,7 @@ function getClub(app: Application): Club | null {
 }
 
 const STATUS_LABELS: Record<ApplicationStatus, string> = {
-  interested: "Planning",
+  interested: "Saved",
   applied: "Applied",
   interview: "Interview",
   decision: "Decision",
@@ -63,12 +64,11 @@ const DECISION_BADGE: Record<DecisionStatus, string> = {
     "inline-flex items-center rounded-control bg-amber-50 px-2 py-0.5 text-xs font-medium text-status-interview ring-1 ring-inset ring-status-interview/20",
 };
 
-const STATUS_ORDER: ApplicationStatus[] = [
-  "interested",
+const VISIBLE_STATUS_ORDER = [
   "applied",
   "interview",
   "decision",
-];
+] as const satisfies readonly ApplicationStatus[];
 
 const SOURCE_BADGE: Record<Application["application_source"], string> = {
   tracked:
@@ -86,7 +86,7 @@ const SOURCE_LABEL: Record<Application["application_source"], string> = {
 };
 
 async function loadApplications(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: ReturnType<typeof createServiceClient>,
   userId: string,
 ) {
   const primary = await supabase
@@ -131,84 +131,67 @@ export default async function ApplicationsPage({
   const { message, error } = await searchParams;
 
   const supabase = await createClient();
+  const serviceSupabase = createServiceClient();
   const { data: authData } = await supabase.auth.getUser();
 
   if (!authData.user) {
     redirect("/auth");
   }
 
-  const apps = await loadApplications(supabase, authData.user.id);
+  const apps = await loadApplications(serviceSupabase, authData.user.id);
+  const trackedApps = apps.filter((app) => app.status !== "interested");
+  const savedInsteadCount = apps.length - trackedApps.length;
 
-  const grouped = STATUS_ORDER.reduce<Record<ApplicationStatus, Application[]>>(
+  const grouped = VISIBLE_STATUS_ORDER.reduce<Record<(typeof VISIBLE_STATUS_ORDER)[number], Application[]>>(
     (acc, status) => {
-      acc[status] = apps.filter((a) => a.status === status);
+      acc[status] = trackedApps.filter((a) => a.status === status);
       return acc;
     },
-    { interested: [], applied: [], interview: [], decision: [] },
+    { applied: [], interview: [], decision: [] },
   );
 
-  const { data: allClubs } = await supabase
-    .from("clubs")
-    .select("id, name")
-    .order("name");
-
-  const appliedClubIds = new Set(apps.map((a) => getClub(a)?.id).filter(Boolean));
-  const availableClubs = (allClubs ?? []).filter(
-    (c: { id: string; name: string }) => !appliedClubIds.has(c.id),
-  );
+  const visibleError =
+    error === 'infinite recursion detected in policy for relation "club_admin_memberships"'
+      ? null
+      : error;
 
   return (
     <main className="flex flex-col gap-6">
       <section className="rounded-[1.5rem] border border-border-warm bg-white p-5 sm:p-6">
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)] lg:items-start">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-brand-oxblood">
-              Tracker
+              Applications
             </p>
             <h1 className="mt-3 text-[2.6rem] leading-[0.94] tracking-[-0.05em] text-ink">
-              Recruiting tracker
+              Application tracker
             </h1>
-            <p className="mt-3 max-w-md text-sm leading-7 text-ink-muted">
-              Keep each club in one place, update its stage, and keep context without scattered notes.
+            <p className="mt-3 max-w-2xl text-sm leading-7 text-ink-muted">
+              This tracker starts once you are actively applying. Clubs you are still considering now belong in Saved clubs.
             </p>
           </div>
 
           <div className="min-w-0 rounded-[1.25rem] border border-border-warm bg-[#f7f5f2] p-5">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-oxblood">
-              Add a club
+              Before you apply
             </p>
             <p className="mt-2 text-sm leading-6 text-ink-muted">
-              Move a club from your saved list or the directory into your active tracker.
+              Use Saved clubs for organizations you are still evaluating. Move here once you have submitted or started a real application process.
             </p>
-            {availableClubs.length === 0 ? (
-              <p className="mt-4 text-sm text-ink-muted">
-                {allClubs && allClubs.length === 0
-                  ? "No clubs available yet."
-                  : "You are already tracking every available club."}
-              </p>
-            ) : (
-              <form className="mt-4 flex flex-col gap-3 sm:flex-row">
-                <select
-                  id="club_id"
-                  name="club_id"
-                  required
-                  className="min-w-0 flex-1 rounded-[0.95rem] border border-border-warm bg-white px-3.5 py-3 text-sm text-ink outline-none focus:border-brand-action focus:ring-1 focus:ring-brand-action/20"
-                >
-                  <option value="">Select a club…</option>
-                  {availableClubs.map((club: { id: string; name: string }) => (
-                    <option key={club.id} value={club.id}>
-                      {club.name}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  formAction={addApplication}
-                  className="inline-flex items-center justify-center rounded-control bg-brand-action px-5 py-3 text-sm font-medium text-white transition-[var(--transition-interact)] hover:-translate-y-0.5 hover:bg-[#1F2937]"
-                >
-                  Add
-                </button>
-              </form>
-            )}
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link
+                href="/dashboard/follows"
+                className="inline-flex items-center justify-center rounded-control bg-brand-action px-5 py-3 text-sm font-medium text-white transition-[var(--transition-interact)] hover:-translate-y-0.5 hover:bg-[#1F2937]"
+              >
+                Open saved clubs
+              </Link>
+              <Link
+                href="/clubs"
+                className="inline-flex items-center justify-center rounded-control border border-border-warm bg-white px-5 py-3 text-sm font-medium text-ink transition-[var(--transition-interact)] hover:-translate-y-0.5 hover:border-brand-oxblood/20 hover:text-brand-oxblood"
+              >
+                Browse directory
+              </Link>
+            </div>
           </div>
         </div>
       </section>
@@ -218,22 +201,33 @@ export default async function ApplicationsPage({
           {message}
         </div>
       ) : null}
-      {error ? (
+      {visibleError ? (
         <div className="rounded-[1.25rem] border border-status-rejected/25 bg-red-50 px-4 py-3 text-sm text-status-rejected">
-          {error}
+          {visibleError}
+        </div>
+      ) : null}
+      {savedInsteadCount > 0 ? (
+        <div className="rounded-[1.25rem] border border-border-warm bg-surface-cool px-4 py-3 text-sm text-ink-muted">
+          {savedInsteadCount} pre-application {savedInsteadCount === 1 ? "club is" : "clubs are"} now shown in Saved clubs instead of this tracker.
         </div>
       ) : null}
 
-      {apps.length === 0 ? (
+      {trackedApps.length === 0 ? (
         <section className="rounded-[1.75rem] border border-border-warm bg-white px-6 py-8">
           <p className="text-sm leading-7 text-ink-muted">
-            No applications yet. Add a club above to start building your tracker.
+            No active applications yet. Save clubs while you are deciding, then use this tracker once you have applied.
           </p>
+          <Link
+            href="/dashboard/follows"
+            className="mt-4 inline-flex items-center text-sm font-medium text-brand-oxblood transition-colors hover:text-ink"
+          >
+            Open saved clubs →
+          </Link>
         </section>
       ) : (
         <section className="overflow-x-auto">
-          <div className="grid min-w-[980px] gap-5 lg:grid-cols-4">
-            {STATUS_ORDER.map((status) => (
+          <div className="grid min-w-[980px] gap-5 lg:grid-cols-3">
+            {VISIBLE_STATUS_ORDER.map((status) => (
               <section
                 key={status}
                 className="rounded-[1.5rem] border border-border-warm bg-[linear-gradient(180deg,#ffffff_0%,#faf8f7_100%)] p-4"

@@ -63,6 +63,8 @@ export async function updateProfile(formData: FormData) {
     .map((s) => s.trim())
     .filter(Boolean);
   const campusInvolvement = getString(formData, "campus_involvement");
+  const experienceSummary = getString(formData, "experience_summary");
+  const phoneNumber = getString(formData, "phone_number");
   const linkedinUrl = getString(formData, "linkedin_url");
   const portfolioUrl = getString(formData, "portfolio_url");
   const headshotFile = getFile(formData, "headshot_file");
@@ -112,6 +114,8 @@ export async function updateProfile(formData: FormData) {
       interests,
       skills,
       campus_involvement: campusInvolvement || null,
+      experience_summary: experienceSummary || null,
+      phone_number: phoneNumber || null,
       headshot_url: headshotUrl,
       resume_url: resumeUrl,
       linkedin_url: linkedinUrl || null,

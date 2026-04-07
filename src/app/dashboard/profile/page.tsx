@@ -38,7 +38,7 @@ export default async function ProfilePage({
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "email, full_name, year, major, interests, skills, campus_involvement, headshot_url, resume_url, linkedin_url, portfolio_url",
+      "email, full_name, year, major, interests, skills, campus_involvement, experience_summary, phone_number, headshot_url, resume_url, linkedin_url, portfolio_url",
     )
     .eq("id", data.user.id)
     .single();
@@ -261,6 +261,32 @@ export default async function ProfilePage({
                   type="text"
                   defaultValue={profile?.major ?? ""}
                   placeholder="Computer Science"
+                  className={INPUT_CLASS}
+                />
+              </Field>
+              <Field label="Phone number" htmlFor="phone_number">
+                <input
+                  id="phone_number"
+                  name="phone_number"
+                  type="tel"
+                  defaultValue={profile?.phone_number ?? ""}
+                  placeholder="(734) 555-0123"
+                  className={INPUT_CLASS}
+                />
+              </Field>
+            </div>
+            <div className="mt-4">
+              <Field
+                label="Recent experience"
+                htmlFor="experience_summary"
+                hint="Use this for internships, project teams, or past work club members should know about."
+              >
+                <textarea
+                  id="experience_summary"
+                  name="experience_summary"
+                  rows={4}
+                  defaultValue={profile?.experience_summary ?? ""}
+                  placeholder="Summer analyst at..., consulting project lead for..., product intern at..."
                   className={INPUT_CLASS}
                 />
               </Field>

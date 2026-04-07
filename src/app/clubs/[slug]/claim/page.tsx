@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
+import { createServiceClient } from "@/lib/supabase/service";
 import { createClient } from "@/lib/supabase/server";
 import { submitClaim } from "./actions";
 
@@ -15,6 +16,7 @@ export default async function ClaimPage({ params, searchParams }: Props) {
   const { message, error } = resolvedSearchParams;
 
   const supabase = await createClient();
+  const serviceSupabase = createServiceClient();
   const { data: authData } = await supabase.auth.getUser();
 
   if (!authData.user) {
@@ -23,7 +25,7 @@ export default async function ClaimPage({ params, searchParams }: Props) {
 
   const userId = authData.user.id;
 
-  const { data: club } = await supabase
+  const { data: club } = await serviceSupabase
     .from("clubs")
     .select("id, name")
     .eq("slug", slug)
@@ -33,7 +35,7 @@ export default async function ClaimPage({ params, searchParams }: Props) {
     notFound();
   }
 
-  const { data: existingClaim } = await supabase
+  const { data: existingClaim } = await serviceSupabase
     .from("club_claims")
     .select("id, status")
     .eq("club_id", club.id)
@@ -41,6 +43,25 @@ export default async function ClaimPage({ params, searchParams }: Props) {
     .order("submitted_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+
+  const { data: managedMemberships } = await serviceSupabase
+    .from("club_admin_memberships")
+    .select("role, clubs(name, slug)")
+    .eq("user_id", userId);
+
+  const managedClubs = (managedMemberships ?? []).flatMap((membership) => {
+    const clubRecord = Array.isArray(membership.clubs) ? membership.clubs[0] : membership.clubs;
+    return clubRecord ? [{ ...clubRecord, role: membership.role }] : [];
+  });
+
+  const currentManagedClub = managedClubs.find((managedClub) => managedClub.slug === slug);
+  const hasPortalAccess = Boolean(currentManagedClub);
+  const normalizedError = typeof error === "string" ? error.toLowerCase() : "";
+  const displayError =
+    hasPortalAccess &&
+    (normalizedError.includes("portal access") || normalizedError.includes("manage this club"))
+      ? null
+      : error;
 
   return (
     <main className="bg-slate-50 min-h-screen px-6 py-12 sm:px-10">
@@ -66,9 +87,9 @@ export default async function ClaimPage({ params, searchParams }: Props) {
               {message}
             </div>
           )}
-          {error && (
+          {displayError && (
             <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-              {error}
+              {displayError}
             </div>
           )}
 
@@ -77,8 +98,64 @@ export default async function ClaimPage({ params, searchParams }: Props) {
               Your claim is pending review. We&apos;ll notify you once it&apos;s processed.
             </div>
           ) : existingClaim?.status === "approved" ? (
-            <div className="mt-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
-              You already manage this club.
+            <div className="mt-4 space-y-4">
+              <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+                You already manage this club.
+              </div>
+
+              {currentManagedClub ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    Club officer access
+                  </p>
+                  <p className="mt-2 text-sm text-slate-600">
+                    Open the club portal to manage applicants, deadlines, forms, imports, and settings.
+                  </p>
+                  <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                    <Link
+                      href={`/portal/${slug}`}
+                      className="inline-flex items-center justify-center rounded-lg bg-brand-action px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#1F2937]"
+                    >
+                      Open club portal
+                    </Link>
+                    <Link
+                      href={`/portal/${slug}/settings`}
+                      className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:border-slate-300 hover:text-slate-900"
+                    >
+                      Club settings
+                    </Link>
+                  </div>
+                </div>
+              ) : null}
+
+              {managedClubs.length > 1 ? (
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    Clubs you manage
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {managedClubs.map((managedClub) => (
+                      <div
+                        key={`${managedClub.slug}-${managedClub.role}`}
+                        className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3"
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-slate-900">{managedClub.name}</p>
+                          <p className="mt-1 text-xs uppercase tracking-[0.14em] text-slate-500">
+                            {managedClub.role}
+                          </p>
+                        </div>
+                        <Link
+                          href={`/portal/${managedClub.slug}`}
+                          className="text-sm font-medium text-brand-action transition-colors hover:text-slate-900"
+                        >
+                          Open →
+                        </Link>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : existingClaim?.status === "rejected" ? (
             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">

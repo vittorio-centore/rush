@@ -1,27 +1,19 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
 import { signOut } from "@/app/auth/actions";
 import { getPlatformAdminAccess } from "@/lib/platform-admin";
-import { createClient } from "@/lib/supabase/server";
 
-export default async function PortalLayout({
+export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getUser();
   const { isPlatformAdmin } = await getPlatformAdminAccess();
 
-  if (!data.user) {
-    redirect("/auth");
-  }
-
   return (
-    <div className="portal-surface min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#f1f5f9_45%,#eef2f7_100%)]">
-      <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-[rgba(248,250,252,0.86)] backdrop-blur-xl">
-        <div className="mx-auto flex h-14 max-w-[1520px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#f1f5f9_45%,#eef2f7_100%)]">
+      <header className="border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-[1280px] items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
             <Link
               href="/"
@@ -29,8 +21,8 @@ export default async function PortalLayout({
             >
               Rush
             </Link>
-            <span className="rounded-full border border-slate-200 bg-white/80 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-              Recruiter portal
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+              Platform admin
             </span>
           </div>
 
@@ -42,7 +34,14 @@ export default async function PortalLayout({
               >
                 Claims inbox
               </Link>
-            ) : null}
+            ) : (
+              <Link
+                href="/admin/access"
+                className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-[var(--transition-interact)] hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50"
+              >
+                Access
+              </Link>
+            )}
             <form action={signOut}>
               <button
                 type="submit"
@@ -54,7 +53,8 @@ export default async function PortalLayout({
           </div>
         </div>
       </header>
-      {children}
+
+      <main className="mx-auto max-w-[1280px] px-4 py-8 sm:px-6 lg:px-8">{children}</main>
     </div>
   );
 }

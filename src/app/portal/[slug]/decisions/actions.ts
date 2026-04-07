@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
+  getPortalCapabilities,
+  getPortalFeatureUnavailableMessage,
+} from "@/lib/portal-features";
+import {
   DECISION_TEMPLATES,
   type ColorToken,
 } from "@/lib/recruiter-decisions";
@@ -43,7 +47,18 @@ function revalidateDecisionPaths(slug: string) {
   revalidatePath(`/portal/${slug}/decisions`);
 }
 
+async function ensureDecisionWorkspace(slug: string) {
+  const capabilities = await getPortalCapabilities(slug);
+
+  if (!capabilities.decisionWorkspace) {
+    redirect(
+      buildRedirect(slug, undefined, getPortalFeatureUnavailableMessage("decisionWorkspace")),
+    );
+  }
+}
+
 export async function applyDecisionTemplate(slug: string, formData: FormData) {
+  await ensureDecisionWorkspace(slug);
   const { supabase, club } = await requirePortalAdmin(slug);
   const templateKey = getString(formData, "template_key");
   const template = DECISION_TEMPLATES.find((item) => item.key === templateKey);
@@ -112,6 +127,7 @@ export async function applyDecisionTemplate(slug: string, formData: FormData) {
 }
 
 export async function saveDecisionSettings(slug: string, formData: FormData) {
+  await ensureDecisionWorkspace(slug);
   const { supabase, club } = await requirePortalAdmin(slug);
 
   const targetAcceptances = Math.max(0, getNumber(formData, "target_acceptances"));
@@ -147,6 +163,7 @@ export async function saveDecisionSettings(slug: string, formData: FormData) {
 }
 
 export async function addPipelineStage(slug: string, formData: FormData) {
+  await ensureDecisionWorkspace(slug);
   const { supabase, club } = await requirePortalAdmin(slug);
 
   const key = getString(formData, "key");
@@ -185,6 +202,7 @@ export async function addPipelineStage(slug: string, formData: FormData) {
 }
 
 export async function updatePipelineStage(slug: string, stageId: string, formData: FormData) {
+  await ensureDecisionWorkspace(slug);
   const { supabase, club } = await requirePortalAdmin(slug);
 
   const key = getString(formData, "key");
@@ -227,6 +245,7 @@ export async function updatePipelineStage(slug: string, stageId: string, formDat
 }
 
 export async function deletePipelineStage(slug: string, stageId: string) {
+  await ensureDecisionWorkspace(slug);
   const { supabase, club } = await requirePortalAdmin(slug);
 
   const { error } = await supabase
@@ -244,6 +263,7 @@ export async function deletePipelineStage(slug: string, stageId: string) {
 }
 
 export async function addDecisionLabel(slug: string, formData: FormData) {
+  await ensureDecisionWorkspace(slug);
   const { supabase, club } = await requirePortalAdmin(slug);
 
   const key = getString(formData, "key");
@@ -282,6 +302,7 @@ export async function addDecisionLabel(slug: string, formData: FormData) {
 }
 
 export async function updateDecisionLabel(slug: string, labelId: string, formData: FormData) {
+  await ensureDecisionWorkspace(slug);
   const { supabase, club } = await requirePortalAdmin(slug);
 
   const key = getString(formData, "key");
@@ -324,6 +345,7 @@ export async function updateDecisionLabel(slug: string, labelId: string, formDat
 }
 
 export async function deleteDecisionLabel(slug: string, labelId: string) {
+  await ensureDecisionWorkspace(slug);
   const { supabase, club } = await requirePortalAdmin(slug);
 
   const { error } = await supabase
@@ -341,6 +363,7 @@ export async function deleteDecisionLabel(slug: string, labelId: string) {
 }
 
 export async function saveRecruiterView(slug: string, formData: FormData) {
+  await ensureDecisionWorkspace(slug);
   const { supabase, club, user } = await requirePortalAdmin(slug);
 
   const name = getString(formData, "name");
@@ -382,6 +405,7 @@ export async function saveRecruiterView(slug: string, formData: FormData) {
 }
 
 export async function deleteRecruiterView(slug: string, viewId: string) {
+  await ensureDecisionWorkspace(slug);
   const { supabase, club } = await requirePortalAdmin(slug);
 
   const { error } = await supabase

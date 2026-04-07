@@ -3,18 +3,44 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { getPortalCapabilities } from "@/lib/portal-features";
 import { requirePortalAdmin } from "@/lib/portal";
 
 const VALID_RECRUITING_STATUSES = ["unknown", "open", "rolling", "closed"] as const;
 const VALID_APPLICATION_MODES = ["none", "external", "native"] as const;
+const VALID_PORTAL_ROLES = ["admin", "reviewer", "member"] as const;
 
 function getString(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value.trim() : "";
 }
 
+async function getMembershipSnapshot(slug: string) {
+  const { supabase, club, user } = await requirePortalAdmin(slug);
+
+  const { data: memberships, error } = await supabase
+    .from("club_admin_memberships")
+    .select("user_id, role")
+    .eq("club_id", club.id);
+
+  if (error) {
+    redirect(`/portal/${slug}/settings?error=${encodeURIComponent(error.message)}`);
+  }
+
+  const adminCount = (memberships ?? []).filter((membership) => membership.role === "admin").length;
+
+  return {
+    supabase,
+    club,
+    user,
+    memberships: memberships ?? [],
+    adminCount,
+  };
+}
+
 export async function updateClubSettings(slug: string, formData: FormData) {
   const { supabase, club } = await requirePortalAdmin(slug);
+  const capabilities = await getPortalCapabilities(slug);
 
   const name = getString(formData, "name");
   const description = getString(formData, "description");
@@ -59,6 +85,16 @@ export async function updateClubSettings(slug: string, formData: FormData) {
     redirect(`/portal/${slug}/settings?error=External+applications+require+an+application+URL.`);
   }
 
+  if (
+    applicationMode === "native" &&
+    club.application_mode !== "native" &&
+    !capabilities.formBuilder
+  ) {
+    redirect(
+      `/portal/${slug}/settings?error=Native+Rush+applications+are+not+available+on+this+database+yet.`,
+    );
+  }
+
   const normalizedTargetYears = Array.from(new Set(targetYears));
   const normalizedApplicationUrl = applicationMode === "external" ? applicationUrl : null;
 
@@ -89,4 +125,114 @@ export async function updateClubSettings(slug: string, formData: FormData) {
   revalidatePath(`/clubs/${slug}`);
   revalidatePath("/clubs");
   redirect(`/portal/${slug}/settings?message=Club+settings+updated.`);
+}
+
+export async function addOfficer(slug: string, formData: FormData) {
+  const { supabase, club } = await requirePortalAdmin(slug);
+  const email = getString(formData, "email").toLowerCase();
+  const role = getString(formData, "role");
+
+  if (!email) {
+    redirect(`/portal/${slug}/settings?error=Officer+email+is+required.`);
+  }
+
+  if (!VALID_PORTAL_ROLES.includes(role as (typeof VALID_PORTAL_ROLES)[number])) {
+    redirect(`/portal/${slug}/settings?error=Choose+a+valid+portal+role.`);
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("id, email")
+    .eq("email", email)
+    .maybeSingle();
+
+  if (profileError) {
+    redirect(`/portal/${slug}/settings?error=${encodeURIComponent(profileError.message)}`);
+  }
+
+  if (!profile) {
+    redirect(
+      `/portal/${slug}/settings?error=No+Rush+account+exists+for+${encodeURIComponent(email)}.`,
+    );
+  }
+
+  const { error } = await supabase.from("club_admin_memberships").upsert(
+    {
+      club_id: club.id,
+      user_id: profile.id,
+      role,
+    },
+    { onConflict: "club_id,user_id" },
+  );
+
+  if (error) {
+    redirect(`/portal/${slug}/settings?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath(`/portal/${slug}/settings`);
+  revalidatePath(`/portal/${slug}`);
+  redirect(`/portal/${slug}/settings?message=${encodeURIComponent(`Access updated for ${email}.`)}`);
+}
+
+export async function updateOfficerRole(slug: string, userId: string, nextRole: string) {
+  const { supabase, club, memberships, adminCount } = await getMembershipSnapshot(slug);
+
+  if (!VALID_PORTAL_ROLES.includes(nextRole as (typeof VALID_PORTAL_ROLES)[number])) {
+    redirect(`/portal/${slug}/settings?error=Choose+a+valid+portal+role.`);
+  }
+
+  const currentMembership = memberships.find((membership) => membership.user_id === userId);
+
+  if (!currentMembership) {
+    redirect(`/portal/${slug}/settings?error=Officer+record+not+found.`);
+  }
+
+  if (currentMembership.role === "admin" && nextRole !== "admin" && adminCount <= 1) {
+    redirect(`/portal/${slug}/settings?error=Keep+at+least+one+club+admin.`);
+  }
+
+  const { error } = await supabase
+    .from("club_admin_memberships")
+    .update({ role: nextRole })
+    .eq("club_id", club.id)
+    .eq("user_id", userId);
+
+  if (error) {
+    redirect(`/portal/${slug}/settings?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath(`/portal/${slug}/settings`);
+  revalidatePath(`/portal/${slug}`);
+  redirect(`/portal/${slug}/settings?message=Officer+role+updated.`);
+}
+
+export async function removeOfficer(slug: string, userId: string) {
+  const { supabase, club, user, memberships, adminCount } = await getMembershipSnapshot(slug);
+  const currentMembership = memberships.find((membership) => membership.user_id === userId);
+
+  if (!currentMembership) {
+    redirect(`/portal/${slug}/settings?error=Officer+record+not+found.`);
+  }
+
+  if (currentMembership.role === "admin" && adminCount <= 1) {
+    redirect(`/portal/${slug}/settings?error=Keep+at+least+one+club+admin.`);
+  }
+
+  if (userId === user.id && currentMembership.role === "admin" && adminCount <= 1) {
+    redirect(`/portal/${slug}/settings?error=You+cannot+remove+the+last+club+admin.`);
+  }
+
+  const { error } = await supabase
+    .from("club_admin_memberships")
+    .delete()
+    .eq("club_id", club.id)
+    .eq("user_id", userId);
+
+  if (error) {
+    redirect(`/portal/${slug}/settings?error=${encodeURIComponent(error.message)}`);
+  }
+
+  revalidatePath(`/portal/${slug}/settings`);
+  revalidatePath(`/portal/${slug}`);
+  redirect(`/portal/${slug}/settings?message=Officer+removed.`);
 }
