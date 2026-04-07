@@ -1,6 +1,6 @@
 # External Integrations
 
-**Analysis Date:** 2026-04-03
+**Analysis Date:** 2026-04-07
 
 ## APIs & Services
 
@@ -32,6 +32,10 @@
   - Fallback: Supabase RPC `get_popular_recommendation_clubs` when ML service is unavailable
   - Config: `RECOMMENDER_SERVICE_URL`, `RECOMMENDER_SERVICE_TOKEN`
 
+**ML Nightly Pipeline:**
+- 5-step sequence: refresh stats → compute embeddings → build dataset → train ranker → publish to S3
+- Runs against Supabase directly via service role key
+
 **Cloud Storage - AWS S3 (ML Service):**
 - AWS S3 - ML model artifact storage (optional)
   - SDK/Client: `boto3` 1.35+ (Python)
@@ -46,8 +50,9 @@
 - Supabase PostgreSQL (hosted)
   - Connection: `NEXT_PUBLIC_SUPABASE_URL` (client), `SUPABASE_SERVICE_ROLE_KEY` (admin)
   - Client: `@supabase/supabase-js` (no ORM - direct Supabase query builder)
-  - Tables: clubs, profiles, user_follows, club_deadlines, deadline_reminder_sends, events, applications (inferred from queries)
-  - RPC functions: `get_due_deadline_reminders`, `get_popular_recommendation_clubs`
+  - Tables: clubs, profiles, user_follows, club_deadlines, deadline_reminder_sends, events, applications, user_recommendation_profiles, club_recommendation_stats, ml_model_versions
+  - Extensions: `vector` (pgvector) — HNSW index on `clubs.embedding` (384-dim) for ANN search
+  - RPC functions: `get_due_deadline_reminders`, `get_popular_recommendation_clubs`, `match_clubs_by_embedding` (cosine similarity)
   - RLS policies enforced (see migrations)
 
 **Caching:**
@@ -145,4 +150,4 @@
 
 ---
 
-*Integration audit: 2026-04-03*
+*Integration audit: 2026-04-07*
