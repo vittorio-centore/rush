@@ -32,7 +32,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 Plans:
 - [x] 01-01-PLAN.md — Schema migration: profile columns, source_key columns, resumes storage bucket
 - [ ] 01-02-PLAN.md — Profile editor: bio, phone, LinkedIn fields + resume PDF upload
-- [ ] 01-03-PLAN.md — Auto-fill merge into applications + source_key snapshot provenance
+- [x] 01-03-PLAN.md — Auto-fill merge into applications + source_key snapshot provenance
 
 ### Phase 2: Application Pipeline & Notifications
 **Goal**: Club officers can move applicants through pipeline stages, students can see their current stage, and submitting an application triggers an immediate confirmation email
@@ -45,7 +45,7 @@ Plans:
   4. Student receives an email confirmation immediately after submitting a club application
 **Plans**: 3 plans
 Plans:
-- [ ] 01-01-PLAN.md — Schema migration: profile columns, source_key columns, resumes storage bucket
+- [x] 01-01-PLAN.md — Schema migration: profile columns, source_key columns, resumes storage bucket
 - [ ] 01-02-PLAN.md — Profile editor: bio, phone, LinkedIn fields + resume PDF upload
 - [ ] 01-03-PLAN.md — Auto-fill merge into applications + source_key snapshot provenance
 
@@ -88,7 +88,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 (Phase 3 may be worked in p
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Student Profile & Auto-Fill | 1/3 | In Progress|  |
+| 1. Student Profile & Auto-Fill | 2/3 | In Progress|  |
 | 2. Application Pipeline & Notifications | 0/? | Not started | - |
 | 3. Visual Portal Editor | 0/? | Not started | - |
 | 4. Admin Onboarding & Launch Readiness | 0/? | Not started | - |
