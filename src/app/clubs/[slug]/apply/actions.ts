@@ -56,7 +56,7 @@ export async function submitNativeApplication(slug: string, formData: FormData) 
     ? await supabase
         .from("club_application_form_questions")
         .select(
-          "id, section_id, type, label, help_text, placeholder, is_required, position, condition_question_id, condition_operator, condition_value",
+          "id, section_id, type, label, help_text, placeholder, is_required, position, condition_question_id, condition_operator, condition_value, source_key",
         )
         .in("section_id", sectionIds)
         .order("position")
@@ -165,6 +165,7 @@ export async function submitNativeApplication(slug: string, formData: FormData) 
         question_id: question.id,
         answer_text: Array.isArray(value) ? null : value,
         answer_values: Array.isArray(value) ? value : [],
+        source_key: question.source_key ?? null,
       };
     });
 
