@@ -9,6 +9,7 @@ export type FormQuestion = {
   condition_question_id: string | null;
   condition_operator: string | null;
   condition_value: string | null;
+  source_key: string | null;
 };
 
 export type AnswerMap = Record<string, string | string[]>;
