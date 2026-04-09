@@ -31,7 +31,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 3 plans
 Plans:
 - [x] 01-01-PLAN.md — Schema migration: profile columns, source_key columns, resumes storage bucket
-- [ ] 01-02-PLAN.md — Profile editor: bio, phone, LinkedIn fields + resume PDF upload
+- [x] 01-02-PLAN.md — Profile editor: bio, phone, LinkedIn fields + resume PDF upload
 - [x] 01-03-PLAN.md — Auto-fill merge into applications + source_key snapshot provenance
 
 ### Phase 2: Application Pipeline & Notifications
@@ -88,7 +88,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 (Phase 3 may be worked in p
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Student Profile & Auto-Fill | 2/3 | In Progress|  |
+| 1. Student Profile & Auto-Fill | 3/3 | Complete | 2026-04-09 |
 | 2. Application Pipeline & Notifications | 0/? | Not started | - |
 | 3. Visual Portal Editor | 0/? | Not started | - |
 | 4. Admin Onboarding & Launch Readiness | 0/? | Not started | - |
