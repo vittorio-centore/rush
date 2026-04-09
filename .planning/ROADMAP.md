@@ -30,7 +30,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. After submitting, the auto-filled answers are frozen — editing the profile does not change what was submitted
 **Plans**: 3 plans
 Plans:
-- [ ] 01-01-PLAN.md — Schema migration: profile columns, source_key columns, resumes storage bucket
+- [x] 01-01-PLAN.md — Schema migration: profile columns, source_key columns, resumes storage bucket
 - [ ] 01-02-PLAN.md — Profile editor: bio, phone, LinkedIn fields + resume PDF upload
 - [ ] 01-03-PLAN.md — Auto-fill merge into applications + source_key snapshot provenance
 
@@ -88,7 +88,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 (Phase 3 may be worked in p
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Student Profile & Auto-Fill | 0/3 | Planning complete | - |
+| 1. Student Profile & Auto-Fill | 1/3 | In Progress|  |
 | 2. Application Pipeline & Notifications | 0/? | Not started | - |
 | 3. Visual Portal Editor | 0/? | Not started | - |
 | 4. Admin Onboarding & Launch Readiness | 0/? | Not started | - |

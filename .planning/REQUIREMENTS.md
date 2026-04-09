@@ -7,10 +7,10 @@
 
 ### Student Profile
 
-- [ ] **PROF-01**: Student can add bio, phone number, and LinkedIn URL to their profile
-- [ ] **PROF-02**: Student can upload a resume PDF stored in Supabase Storage
-- [ ] **PROF-03**: Profile fields (name, major, year, bio) auto-populate into any club application at open time
-- [ ] **PROF-04**: Auto-filled answers snapshot into `club_application_submission_answers` at submit — profile edits do not retroactively change submitted applications
+- [x] **PROF-01**: Student can add bio, phone number, and LinkedIn URL to their profile
+- [x] **PROF-02**: Student can upload a resume PDF stored in Supabase Storage
+- [x] **PROF-03**: Profile fields (name, major, year, bio) auto-populate into any club application at open time
+- [x] **PROF-04**: Auto-filled answers snapshot into `club_application_submission_answers` at submit — profile edits do not retroactively change submitted applications
 
 ### Application Pipeline
 
@@ -67,10 +67,10 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PROF-01 | Phase 1 | Pending |
-| PROF-02 | Phase 1 | Pending |
-| PROF-03 | Phase 1 | Pending |
-| PROF-04 | Phase 1 | Pending |
+| PROF-01 | Phase 1 | Complete |
+| PROF-02 | Phase 1 | Complete |
+| PROF-03 | Phase 1 | Complete |
+| PROF-04 | Phase 1 | Complete |
 | PIPE-01 | Phase 2 | Pending |
 | PIPE-02 | Phase 2 | Pending |
 | PIPE-03 | Phase 2 | Pending |
