@@ -26,6 +26,7 @@ type FormQuestion = {
   condition_question_id: string | null;
   condition_operator: string | null;
   condition_value: string | null;
+  source_key: string | null;
 };
 
 type FormSection = {
@@ -51,6 +52,12 @@ export default async function ClubApplyPage({
   if (!authData.user) {
     redirect(`/auth?message=Sign+in+to+apply+through+Rush.`);
   }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name, major, year, bio")
+    .eq("id", authData.user.id)
+    .single();
 
   const { data: club } = await supabase
     .from("clubs")
@@ -90,7 +97,7 @@ export default async function ClubApplyPage({
     ? await supabase
         .from("club_application_form_questions")
         .select(
-          "id, section_id, type, label, help_text, placeholder, is_required, position, condition_question_id, condition_operator, condition_value",
+          "id, section_id, type, label, help_text, placeholder, is_required, position, condition_question_id, condition_operator, condition_value, source_key",
         )
         .in("section_id", sectionIds)
         .order("position")
@@ -131,7 +138,7 @@ export default async function ClubApplyPage({
         .eq("submission_id", existingSubmission.id)
     : { data: [] };
 
-  const initialAnswers = Object.fromEntries(
+  let initialAnswers: Record<string, string | string[]> = Object.fromEntries(
     (existingAnswersData ?? []).map((answer) => [
       answer.question_id,
       Array.isArray(answer.answer_values) && answer.answer_values.length > 0
@@ -139,6 +146,23 @@ export default async function ClubApplyPage({
         : answer.answer_text ?? "",
     ]),
   );
+
+  const profileValues: Record<string, string> = {
+    full_name: profile?.full_name ?? "",
+    major: profile?.major ?? "",
+    year: profile?.year ?? "",
+    bio: profile?.bio ?? "",
+  };
+
+  for (const question of questions) {
+    if (
+      question.source_key &&
+      profileValues[question.source_key] !== undefined &&
+      initialAnswers[question.id] === undefined
+    ) {
+      initialAnswers[question.id] = profileValues[question.source_key];
+    }
+  }
 
   const optionsByQuestion = new Map<string, FormOption[]>();
   for (const option of options) {
