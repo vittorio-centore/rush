@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { updateProfile } from "./actions";
+import ResumeUpload from "./ResumeUpload";
 
 const YEAR_OPTIONS = [
   { value: "", label: "Select year" },
@@ -26,7 +27,7 @@ export default async function ProfilePage({
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, year, major, interests")
+    .select("full_name, year, major, interests, bio, phone, linkedin_url, resume_url")
     .eq("id", data.user.id)
     .single();
 
@@ -139,6 +140,51 @@ export default async function ProfilePage({
           </p>
         </div>
 
+        {/* Bio */}
+        <div>
+          <label htmlFor="bio" className="block text-sm font-medium text-slate-700 mb-1">
+            Bio
+          </label>
+          <textarea
+            id="bio"
+            name="bio"
+            rows={4}
+            defaultValue={profile?.bio ?? ""}
+            placeholder="Tell clubs a bit about yourself"
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
+
+        {/* Phone */}
+        <div>
+          <label htmlFor="phone" className="block text-sm font-medium text-slate-700 mb-1">
+            Phone number
+          </label>
+          <input
+            id="phone"
+            name="phone"
+            type="tel"
+            defaultValue={profile?.phone ?? ""}
+            placeholder="(555) 123-4567"
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
+
+        {/* LinkedIn URL */}
+        <div>
+          <label htmlFor="linkedin_url" className="block text-sm font-medium text-slate-700 mb-1">
+            LinkedIn URL
+          </label>
+          <input
+            id="linkedin_url"
+            name="linkedin_url"
+            type="url"
+            defaultValue={profile?.linkedin_url ?? ""}
+            placeholder="https://linkedin.com/in/your-profile"
+            className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
+
         <div className="pt-1">
           <button
             type="submit"
@@ -149,6 +195,11 @@ export default async function ProfilePage({
           </button>
         </div>
       </form>
+
+      <ResumeUpload
+        userId={data.user.id}
+        currentResumePath={profile?.resume_url ?? null}
+      />
     </div>
   );
 }
