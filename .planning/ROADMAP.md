@@ -45,9 +45,9 @@ Plans:
   4. Student receives an email confirmation immediately after submitting a club application
 **Plans**: 3 plans
 Plans:
-- [x] 01-01-PLAN.md — Schema migration: profile columns, source_key columns, resumes storage bucket
-- [ ] 01-02-PLAN.md — Profile editor: bio, phone, LinkedIn fields + resume PDF upload
-- [ ] 01-03-PLAN.md — Auto-fill merge into applications + source_key snapshot provenance
+- [ ] 02-01-PLAN.md — Schema migration: stage transitions audit table, is_released column, RLS policies
+- [ ] 02-02-PLAN.md — Portal-side: audit log insert in updateApplicantStatus, stage history UI, release toggle
+- [ ] 02-03-PLAN.md — Student tracker released-stage display + submission confirmation email
 
 ### Phase 3: Visual Portal Editor
 **Goal**: Club officers can customize their public-facing club page with brand colors, a hero image, section visibility controls, and layout choice — rendered safely via SSR CSS variables
@@ -61,9 +61,9 @@ Plans:
   5. Theme is stored as structured named columns — no free-form CSS can be injected onto the public unauthenticated page
 **Plans**: 3 plans
 Plans:
-- [ ] 01-01-PLAN.md — Schema migration: profile columns, source_key columns, resumes storage bucket
-- [ ] 01-02-PLAN.md — Profile editor: bio, phone, LinkedIn fields + resume PDF upload
-- [ ] 01-03-PLAN.md — Auto-fill merge into applications + source_key snapshot provenance
+- [ ] 03-01-PLAN.md — [to be planned]
+- [ ] 03-02-PLAN.md — [to be planned]
+- [ ] 03-03-PLAN.md — [to be planned]
 **UI hint**: yes
 
 ### Phase 4: Admin Onboarding & Launch Readiness
@@ -77,9 +77,9 @@ Plans:
   4. Any attempt to perform a portal write operation without an approved admin is blocked at the server — not just hidden in the UI
 **Plans**: 3 plans
 Plans:
-- [ ] 01-01-PLAN.md — Schema migration: profile columns, source_key columns, resumes storage bucket
-- [ ] 01-02-PLAN.md — Profile editor: bio, phone, LinkedIn fields + resume PDF upload
-- [ ] 01-03-PLAN.md — Auto-fill merge into applications + source_key snapshot provenance
+- [ ] 04-01-PLAN.md — [to be planned]
+- [ ] 04-02-PLAN.md — [to be planned]
+- [ ] 04-03-PLAN.md — [to be planned]
 
 ## Progress
 
@@ -89,6 +89,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 (Phase 3 may be worked in p
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Student Profile & Auto-Fill | 3/3 | Complete    | 2026-04-10 |
-| 2. Application Pipeline & Notifications | 0/? | Not started | - |
+| 2. Application Pipeline & Notifications | 0/3 | Not started | - |
 | 3. Visual Portal Editor | 0/? | Not started | - |
 | 4. Admin Onboarding & Launch Readiness | 0/? | Not started | - |
