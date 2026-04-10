@@ -12,7 +12,7 @@ Rush completes four product surfaces to make the platform launchable: student pr
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Student Profile & Auto-Fill** - Students enrich their profiles and have shared fields pre-populated into every club application
+- [x] **Phase 1: Student Profile & Auto-Fill** - Students enrich their profiles and have shared fields pre-populated into every club application (completed 2026-04-10)
 - [ ] **Phase 2: Application Pipeline & Notifications** - Club officers move applicants through stages; students see their stage; submission triggers a confirmation email
 - [ ] **Phase 3: Visual Portal Editor** - Club officers customize their public page with accent color, hero image, section toggles, and layout variant
 - [ ] **Phase 4: Admin Onboarding & Launch Readiness** - Platform admin approves clubs before they go live; unapproved clubs cannot access portal write operations
@@ -88,7 +88,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 (Phase 3 may be worked in p
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Student Profile & Auto-Fill | 3/3 | Complete | 2026-04-09 |
+| 1. Student Profile & Auto-Fill | 3/3 | Complete    | 2026-04-10 |
 | 2. Application Pipeline & Notifications | 0/? | Not started | - |
 | 3. Visual Portal Editor | 0/? | Not started | - |
 | 4. Admin Onboarding & Launch Readiness | 0/? | Not started | - |
