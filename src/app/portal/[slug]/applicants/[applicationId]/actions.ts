@@ -26,7 +26,7 @@ export async function updateApplicantStatus(
   applicationId: string,
   formData: FormData,
 ) {
-  const { supabase, club, membership } = await getPortalContext(slug);
+  const { supabase, club, membership, user } = await getPortalContext(slug);
 
   if (membership.role !== "admin") {
     redirect(`/portal/${slug}`);
@@ -89,6 +89,16 @@ export async function updateApplicantStatus(
     decisionStatus = rawDecisionStatus as DecisionStatus;
   }
 
+  // Fetch current stage_id before update to detect stage change (per D-04)
+  const { data: currentApp } = await supabase
+    .from("user_applications")
+    .select("stage_id")
+    .eq("id", applicationId)
+    .eq("club_id", club.id)
+    .maybeSingle();
+
+  const previousStageId = currentApp?.stage_id ?? null;
+
   const { data: updated, error: updateError } = await supabase
     .from("user_applications")
     .update({
@@ -110,6 +120,17 @@ export async function updateApplicantStatus(
         updateError?.message ?? "Unable to update applicant.",
       )}`,
     );
+  }
+
+  // Insert audit log entry if stage changed (per D-01, D-04)
+  if (stageId !== previousStageId) {
+    await supabase.from("club_application_stage_transitions").insert({
+      application_id: applicationId,
+      from_stage_id: previousStageId,
+      to_stage_id: stageId,
+      changed_by_user_id: user.id,
+      notes: null,
+    });
   }
 
   revalidatePath(`/portal/${slug}`);
