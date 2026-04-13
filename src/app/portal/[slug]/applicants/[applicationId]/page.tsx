@@ -78,6 +78,15 @@ type DecisionLabel = {
   color_token: "slate" | "blue" | "amber" | "green" | "rose" | "violet";
 };
 
+type StageTransition = {
+  id: string;
+  from_stage_id: string | null;
+  to_stage_id: string | null;
+  changed_at: string;
+  notes: string | null;
+  changed_by_user_id: string;
+};
+
 type SubmissionAnswer = {
   answer_text: string | null;
   answer_values: string[] | null;
@@ -285,6 +294,22 @@ export default async function ApplicantPage({
     role: member.role,
     profile: reviewerOptionProfiles.get(member.user_id) ?? null,
   }));
+
+  const { data: transitionsData } = await supabase
+    .from("club_application_stage_transitions")
+    .select("id, from_stage_id, to_stage_id, changed_at, notes, changed_by_user_id")
+    .eq("application_id", applicationId)
+    .order("changed_at", { ascending: false });
+
+  const transitions = (transitionsData ?? []) as StageTransition[];
+
+  const transitionActorIds = [...new Set(transitions.map((t) => t.changed_by_user_id))];
+  const { data: transitionActorProfiles } = transitionActorIds.length > 0
+    ? await supabase.from("profiles").select("id, full_name, email").in("id", transitionActorIds)
+    : { data: [] };
+  const transitionActors = new Map(
+    (transitionActorProfiles ?? []).map((p) => [p.id, p]),
+  );
 
   const applicantName = getApplicantField(application, "full_name") ?? "Unknown applicant";
   const applicantEmail = getApplicantField(application, "email");
@@ -571,6 +596,55 @@ export default async function ApplicantPage({
                     ))
                   )}
                 </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h3 className="text-lg font-semibold text-slate-900">Stage history</h3>
+                {transitions.length === 0 ? (
+                  <p className="mt-4 text-sm text-slate-400">No stage transitions recorded yet.</p>
+                ) : (
+                  <div className="mt-4 flex flex-col gap-3">
+                    {transitions.map((transition) => {
+                      const fromStage = transition.from_stage_id ? stageById.get(transition.from_stage_id) : null;
+                      const toStage = transition.to_stage_id ? stageById.get(transition.to_stage_id) : null;
+                      const actor = transitionActors.get(transition.changed_by_user_id);
+                      return (
+                        <div key={transition.id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                          <div className="flex items-center gap-2 text-sm">
+                            {fromStage ? (
+                              <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${colorTokenClasses(fromStage.color_token)}`}>
+                                {fromStage.label}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-slate-400">--</span>
+                            )}
+                            <span className="text-slate-400">&rarr;</span>
+                            {toStage ? (
+                              <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${colorTokenClasses(toStage.color_token)}`}>
+                                {toStage.label}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-slate-400">--</span>
+                            )}
+                          </div>
+                          <p className="mt-2 text-xs text-slate-500">
+                            {actor?.full_name || actor?.email || "Unknown"} &middot;{" "}
+                            {new Date(transition.changed_at).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })}
+                          </p>
+                          {transition.notes ? (
+                            <p className="mt-1 text-sm text-slate-600">{transition.notes}</p>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </>
           ) : null}

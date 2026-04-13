@@ -12,6 +12,7 @@ import {
   saveRecruiterView,
   updateDecisionLabel,
   updatePipelineStage,
+  updateStageRelease,
 } from "@/app/portal/[slug]/decisions/actions";
 import {
   colorTokenClasses,
@@ -28,6 +29,7 @@ type Stage = {
   status_bucket: "interested" | "applied" | "interview" | "decision";
   color_token: "slate" | "blue" | "amber" | "green" | "rose" | "violet";
   position: number;
+  is_released: boolean;
 };
 
 type DecisionLabel = {
@@ -186,7 +188,7 @@ export default async function PortalDecisionsPage({
       .maybeSingle(),
     supabase
       .from("club_pipeline_stages")
-      .select("id, key, label, status_bucket, color_token, position")
+      .select("id, key, label, status_bucket, color_token, position, is_released")
       .eq("club_id", club.id)
       .order("position"),
     supabase
@@ -613,7 +615,7 @@ export default async function PortalDecisionsPage({
               <p className="text-sm text-slate-400">Apply a preset or add your first stage.</p>
             ) : (
               stages.map((stage) => (
-                <form key={stage.id} className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 lg:grid-cols-[1fr_1.3fr_1fr_1fr_120px_auto_auto]">
+                <form key={stage.id} className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 lg:grid-cols-[1fr_1.3fr_1fr_1fr_120px_auto_auto_auto]">
                   <input name="key" defaultValue={stage.key} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
                   <input name="label" defaultValue={stage.label} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
                   <select name="status_bucket" defaultValue={stage.status_bucket} className="rounded-lg border border-slate-200 px-3 py-2 text-sm">
@@ -631,6 +633,17 @@ export default async function PortalDecisionsPage({
                     ))}
                   </select>
                   <input name="position" type="number" defaultValue={stage.position} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                  <form className="flex items-center gap-2">
+                    <input type="hidden" name="is_released" value={stage.is_released ? "false" : "true"} />
+                    <button
+                      formAction={updateStageRelease.bind(null, slug, stage.id)}
+                      type="submit"
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${stage.is_released ? "bg-green-500" : "bg-slate-300"}`}
+                    >
+                      <span className={`pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${stage.is_released ? "translate-x-4" : "translate-x-0"}`} />
+                    </button>
+                    <span className="text-xs text-slate-700">{stage.is_released ? "Visible" : "Hidden"}</span>
+                  </form>
                   <button formAction={updatePipelineStage.bind(null, slug, stage.id)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-white">
                     Save
                   </button>
