@@ -45,7 +45,7 @@ Plans:
   4. Student receives an email confirmation immediately after submitting a club application
 **Plans**: 3 plans
 Plans:
-- [ ] 02-01-PLAN.md — Schema migration: stage transitions audit table, is_released column, RLS policies
+- [x] 02-01-PLAN.md — Schema migration: stage transitions audit table, is_released column, RLS policies
 - [ ] 02-02-PLAN.md — Portal-side: audit log insert in updateApplicantStatus, stage history UI, release toggle
 - [ ] 02-03-PLAN.md — Student tracker released-stage display + submission confirmation email
 
