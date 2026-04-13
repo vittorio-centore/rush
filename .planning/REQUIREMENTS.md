@@ -20,7 +20,7 @@
 
 ### Notifications
 
-- [ ] **NOTF-01**: Student receives an email confirmation immediately after submitting a club application
+- [x] **NOTF-01**: Student receives an email confirmation immediately after submitting a club application
 
 ### Portal Editor
 
@@ -74,7 +74,7 @@
 | PIPE-01 | Phase 2 | Complete |
 | PIPE-02 | Phase 2 | Complete |
 | PIPE-03 | Phase 2 | Complete |
-| NOTF-01 | Phase 2 | Pending |
+| NOTF-01 | Phase 2 | Complete |
 | EDIT-01 | Phase 3 | Pending |
 | EDIT-02 | Phase 3 | Pending |
 | EDIT-03 | Phase 3 | Pending |
