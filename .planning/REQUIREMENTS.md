@@ -14,7 +14,7 @@
 
 ### Application Pipeline
 
-- [ ] **PIPE-01**: Club officer can move an applicant through pipeline stages (submit → review → interview → decision)
+- [x] **PIPE-01**: Club officer can move an applicant through pipeline stages (submit → review → interview → decision)
 - [x] **PIPE-02**: Each stage transition is recorded in an append-only audit log
 - [x] **PIPE-03**: Student can see their current pipeline stage on their application tracker
 
@@ -71,7 +71,7 @@
 | PROF-02 | Phase 1 | Complete |
 | PROF-03 | Phase 1 | Complete |
 | PROF-04 | Phase 1 | Complete |
-| PIPE-01 | Phase 2 | Pending |
+| PIPE-01 | Phase 2 | Complete |
 | PIPE-02 | Phase 2 | Complete |
 | PIPE-03 | Phase 2 | Complete |
 | NOTF-01 | Phase 2 | Pending |
