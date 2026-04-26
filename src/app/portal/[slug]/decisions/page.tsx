@@ -12,6 +12,7 @@ import {
   saveRecruiterView,
   updateDecisionLabel,
   updatePipelineStage,
+  updateStageRelease,
 } from "@/app/portal/[slug]/decisions/actions";
 import {
   getPortalCapabilities,
@@ -32,6 +33,7 @@ type Stage = {
   status_bucket: "interested" | "applied" | "interview" | "decision";
   color_token: "slate" | "blue" | "amber" | "green" | "rose" | "violet";
   position: number;
+  is_released: boolean;
 };
 
 type DecisionLabel = {
@@ -266,7 +268,7 @@ export default async function PortalDecisionsPage({
       .maybeSingle(),
     supabase
       .from("club_pipeline_stages")
-      .select("id, key, label, status_bucket, color_token, position")
+      .select("id, key, label, status_bucket, color_token, position, is_released")
       .eq("club_id", club.id)
       .order("position"),
     supabase
@@ -745,7 +747,7 @@ export default async function PortalDecisionsPage({
               </p>
             ) : (
               stages.map((stage) => (
-                <form key={stage.id} className={`grid gap-3 ${SOFT_PANEL_CLASS} p-4 lg:grid-cols-[1fr_1.3fr_1fr_1fr_140px_auto_auto]`}>
+                <form key={stage.id} className={`grid gap-3 ${SOFT_PANEL_CLASS} p-4 lg:grid-cols-[1fr_1.3fr_1fr_1fr_140px_120px_auto_auto]`}>
                   <input
                     name="key"
                     defaultValue={stage.key}
@@ -779,6 +781,26 @@ export default async function PortalDecisionsPage({
                     aria-label={`Order for ${stage.label}`}
                     className={INPUT_CLASS}
                   />
+                  <div className="flex items-center gap-2">
+                    <input type="hidden" name="is_released" value={stage.is_released ? "false" : "true"} />
+                    <button
+                      formAction={updateStageRelease.bind(null, slug, stage.id)}
+                      type="submit"
+                      aria-label={`${stage.is_released ? "Hide" : "Release"} ${stage.label}`}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+                        stage.is_released ? "bg-emerald-500" : "bg-slate-300"
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                          stage.is_released ? "translate-x-5" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                    <span className="text-xs font-medium text-slate-600">
+                      {stage.is_released ? "Visible" : "Hidden"}
+                    </span>
+                  </div>
                   <button formAction={updatePipelineStage.bind(null, slug, stage.id)} className={SECONDARY_BUTTON_CLASS}>
                     Save
                   </button>

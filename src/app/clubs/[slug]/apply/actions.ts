@@ -10,6 +10,7 @@ import {
   type AnswerMap,
   type FormQuestion,
 } from "@/lib/application-forms";
+import { sendApplicationConfirmation } from "@/lib/email";
 import { createEventInsert } from "@/lib/events";
 import { createClient } from "@/lib/supabase/server";
 
@@ -27,7 +28,7 @@ export async function submitNativeApplication(slug: string, formData: FormData) 
 
   const { data: club } = await supabase
     .from("clubs")
-    .select("id, slug, application_mode")
+    .select("id, slug, name, application_mode")
     .eq("slug", slug)
     .single();
 
@@ -56,7 +57,7 @@ export async function submitNativeApplication(slug: string, formData: FormData) 
     ? await supabase
         .from("club_application_form_questions")
         .select(
-          "id, section_id, type, label, help_text, placeholder, is_required, position, condition_question_id, condition_operator, condition_value",
+          "id, section_id, type, label, help_text, placeholder, is_required, position, condition_question_id, condition_operator, condition_value, source_key",
         )
         .in("section_id", sectionIds)
         .order("position")
@@ -165,6 +166,7 @@ export async function submitNativeApplication(slug: string, formData: FormData) 
         question_id: question.id,
         answer_text: Array.isArray(value) ? null : value,
         answer_values: Array.isArray(value) ? value : [],
+        source_key: question.source_key ?? null,
       };
     });
 
@@ -176,6 +178,20 @@ export async function submitNativeApplication(slug: string, formData: FormData) 
     if (error) {
       redirect(`/clubs/${slug}/apply?error=${encodeURIComponent(error.message)}`);
     }
+  }
+
+  // Send confirmation email (non-fatal per D-09, Pitfall 3)
+  try {
+    const emailResult = await sendApplicationConfirmation(
+      authData.user.email!,
+      club.name,
+      now,
+    );
+    if (emailResult.error) {
+      console.error("Confirmation email failed:", emailResult.error);
+    }
+  } catch (emailError) {
+    console.error("Confirmation email threw:", emailError);
   }
 
   await supabase.from("events").insert([

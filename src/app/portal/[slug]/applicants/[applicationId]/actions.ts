@@ -102,7 +102,7 @@ export async function updateApplicantStatus(
   applicationId: string,
   formData: FormData,
 ) {
-  const { supabase, club, membership } = await getPortalContext(slug);
+  const { supabase, club, membership, user } = await getPortalContext(slug);
   const capabilities = await getPortalCapabilities(slug);
 
   if (membership.role !== "admin") {
@@ -174,6 +174,15 @@ export async function updateApplicantStatus(
     decisionStatus = rawDecisionStatus as DecisionStatus;
   }
 
+  const { data: currentApplication } = await supabase
+    .from("user_applications")
+    .select("stage_id")
+    .eq("id", applicationId)
+    .eq("club_id", club.id)
+    .maybeSingle();
+
+  const previousStageId = currentApplication?.stage_id ?? null;
+
   const { data: updated, error: updateError } = await supabase
     .from("user_applications")
     .update({
@@ -195,6 +204,16 @@ export async function updateApplicantStatus(
         updateError?.message ?? "Unable to update applicant.",
       )}`,
     );
+  }
+
+  if (stageId !== previousStageId) {
+    await supabase.from("club_application_stage_transitions").insert({
+      application_id: applicationId,
+      from_stage_id: previousStageId,
+      to_stage_id: stageId,
+      changed_by_user_id: user.id,
+      notes: null,
+    });
   }
 
   revalidatePath(`/portal/${slug}`);

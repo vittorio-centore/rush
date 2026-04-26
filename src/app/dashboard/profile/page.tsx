@@ -38,7 +38,7 @@ export default async function ProfilePage({
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "email, full_name, year, major, interests, skills, campus_involvement, experience_summary, phone_number, headshot_url, resume_url, linkedin_url, portfolio_url",
+      "email, full_name, year, major, interests, bio, skills, campus_involvement, experience_summary, phone, phone_number, headshot_url, resume_url, linkedin_url, portfolio_url",
     )
     .eq("id", data.user.id)
     .single();
@@ -120,6 +120,9 @@ export default async function ProfilePage({
               <p className="mt-2 text-sm leading-6 text-ink-muted">
                 {profile?.campus_involvement || "Add a short involvement line so clubs can place you quickly."}
               </p>
+              {profile?.bio ? (
+                <p className="mt-3 text-sm leading-6 text-ink-muted">{profile.bio}</p>
+              ) : null}
               <p className="mt-3 text-xs uppercase tracking-[0.18em] text-ink-muted">
                 {[profile?.major, profile?.year].filter(Boolean).join(" · ") || "Major · Year"}
               </p>
@@ -269,8 +272,24 @@ export default async function ProfilePage({
                   id="phone_number"
                   name="phone_number"
                   type="tel"
-                  defaultValue={profile?.phone_number ?? ""}
+                  defaultValue={profile?.phone_number ?? profile?.phone ?? ""}
                   placeholder="(734) 555-0123"
+                  className={INPUT_CLASS}
+                />
+              </Field>
+            </div>
+            <div className="mt-4">
+              <Field
+                label="Bio"
+                htmlFor="bio"
+                hint="This can auto-fill short-answer application questions that ask for a profile summary."
+              >
+                <textarea
+                  id="bio"
+                  name="bio"
+                  rows={4}
+                  defaultValue={profile?.bio ?? ""}
+                  placeholder="A short intro clubs can reuse across applications."
                   className={INPUT_CLASS}
                 />
               </Field>

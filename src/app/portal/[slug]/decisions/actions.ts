@@ -421,3 +421,22 @@ export async function deleteRecruiterView(slug: string, viewId: string) {
   revalidateDecisionPaths(slug);
   redirect(buildRedirect(slug, "Saved view deleted."));
 }
+
+export async function updateStageRelease(slug: string, stageId: string, formData: FormData) {
+  await ensureDecisionWorkspace(slug);
+  const { supabase, club } = await requirePortalAdmin(slug);
+  const isReleased = formData.get("is_released") === "true";
+
+  const { error } = await supabase
+    .from("club_pipeline_stages")
+    .update({ is_released: isReleased, updated_at: new Date().toISOString() })
+    .eq("id", stageId)
+    .eq("club_id", club.id);
+
+  if (error) {
+    redirect(buildRedirect(slug, undefined, error.message));
+  }
+
+  revalidateDecisionPaths(slug);
+  redirect(buildRedirect(slug, "Stage visibility updated."));
+}

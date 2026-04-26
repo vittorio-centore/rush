@@ -58,6 +58,7 @@ export async function updateProfile(formData: FormData) {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+  const bio = getString(formData, "bio");
   const skills = getString(formData, "skills")
     .split(",")
     .map((s) => s.trim())
@@ -72,6 +73,10 @@ export async function updateProfile(formData: FormData) {
 
   if (!fullName) {
     redirect("/dashboard/profile?error=Full+name+is+required.");
+  }
+
+  if (linkedinUrl && !linkedinUrl.startsWith("https://")) {
+    redirect("/dashboard/profile?error=LinkedIn+URL+must+start+with+https://");
   }
 
   const { data: currentProfile, error: currentProfileError } = await supabase
@@ -112,10 +117,12 @@ export async function updateProfile(formData: FormData) {
       year: year || null,
       major: major || null,
       interests,
+      bio: bio || null,
       skills,
       campus_involvement: campusInvolvement || null,
       experience_summary: experienceSummary || null,
       phone_number: phoneNumber || null,
+      phone: phoneNumber || null,
       headshot_url: headshotUrl,
       resume_url: resumeUrl,
       linkedin_url: linkedinUrl || null,

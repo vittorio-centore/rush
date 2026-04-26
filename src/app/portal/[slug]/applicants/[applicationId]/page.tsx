@@ -51,10 +51,12 @@ type ProfileRow = {
   email: string | null;
   year: string | null;
   major: string | null;
+  bio: string | null;
   interests: string[] | null;
   skills: string[] | null;
   campus_involvement: string | null;
   experience_summary: string | null;
+  phone: string | null;
   phone_number: string | null;
   headshot_url: string | null;
   resume_url: string | null;
@@ -100,6 +102,15 @@ type DecisionLabel = {
   label: string;
   decision_status: "pending" | "accepted" | "rejected" | "waitlisted";
   color_token: "slate" | "blue" | "amber" | "green" | "rose" | "violet";
+};
+
+type StageTransition = {
+  id: string;
+  from_stage_id: string | null;
+  to_stage_id: string | null;
+  changed_at: string;
+  notes: string | null;
+  changed_by_user_id: string;
 };
 
 type SubmissionAnswer = {
@@ -193,10 +204,12 @@ function enrichApplicantProfile(
     email: profile.email ?? null,
     year: profile.year ?? null,
     major: profile.major ?? null,
+    bio: profile.bio ?? null,
     interests: Array.isArray(profile.interests) ? profile.interests : [],
     skills: Array.isArray(profile.skills) ? profile.skills : [],
     campus_involvement: profile.campus_involvement ?? null,
     experience_summary: profile.experience_summary ?? null,
+    phone: profile.phone ?? null,
     phone_number: profile.phone_number ?? null,
     headshot_url: profile.headshot_url ?? null,
     resume_url: profile.resume_url ?? null,
@@ -212,12 +225,14 @@ async function loadApplicantProfile(
   const selectAttempts = [
     {
       select:
-        "id, full_name, email, year, major, interests, skills, campus_involvement, experience_summary, phone_number, headshot_url, resume_url, linkedin_url, portfolio_url",
+        "id, full_name, email, year, major, bio, interests, skills, campus_involvement, experience_summary, phone, phone_number, headshot_url, resume_url, linkedin_url, portfolio_url",
       missingColumns: [
+        "bio",
         "interests",
         "skills",
         "campus_involvement",
         "experience_summary",
+        "phone",
         "phone_number",
         "headshot_url",
         "resume_url",
@@ -565,6 +580,28 @@ export default async function ApplicantPage({
     (memberNoteProfilesData ?? []).map((profile) => [profile.id, profile]),
   );
   const currentMemberNote = memberNotes.find((note) => note.author_user_id === user.id) ?? null;
+  const { data: transitionsData, error: transitionsError } = capabilities.decisionWorkspace
+    ? await supabase
+        .from("club_application_stage_transitions")
+        .select("id, from_stage_id, to_stage_id, changed_at, notes, changed_by_user_id")
+        .eq("application_id", applicationId)
+        .order("changed_at", { ascending: false })
+    : { data: [], error: null };
+  const transitions = isMissingSchemaTable(
+    transitionsError,
+    "club_application_stage_transitions",
+  )
+    ? []
+    : ((transitionsData ?? []) as StageTransition[]);
+  const transitionActorIds = Array.from(
+    new Set(transitions.map((transition) => transition.changed_by_user_id)),
+  );
+  const { data: transitionActorProfilesData } = transitionActorIds.length
+    ? await supabase.from("profiles").select("id, full_name, email").in("id", transitionActorIds)
+    : { data: [] };
+  const transitionActors = new Map(
+    (transitionActorProfilesData ?? []).map((profile) => [profile.id, profile]),
+  );
 
   const decisionStatus = application.decision_status ?? "pending";
   const roundFocus = getRoundFocus(currentStage, application.status);
@@ -695,7 +732,9 @@ export default async function ApplicantPage({
                 </p>
                 <p className="mt-3 text-sm text-gray-900">{applicantEmail ?? "No email added"}</p>
                 <p className="mt-2 text-sm text-gray-600">
-                  {application.profiles?.phone_number ?? "No phone number added"}
+                  {application.profiles?.phone_number ??
+                    application.profiles?.phone ??
+                    "No phone number added"}
                 </p>
               </div>
 
@@ -725,6 +764,15 @@ export default async function ApplicantPage({
 
           <div className="min-w-0 flex-1">
             <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
+                  Bio
+                </p>
+                <p className="mt-3 text-sm leading-6 text-gray-700">
+                  {application.profiles?.bio ?? "No bio added yet."}
+                </p>
+              </div>
+
               <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
                   Recent experience
@@ -1360,6 +1408,71 @@ export default async function ApplicantPage({
               schema is upgraded.
             </div>
           )}
+
+          <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm lg:col-span-2">
+            <h3 className="text-sm font-bold uppercase tracking-widest text-gray-400">
+              Stage history
+            </h3>
+            {transitions.length === 0 ? (
+              <p className="mt-4 text-sm text-gray-400">No stage transitions recorded yet.</p>
+            ) : (
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {transitions.map((transition) => {
+                  const fromStage = transition.from_stage_id
+                    ? stageById.get(transition.from_stage_id) ?? null
+                    : null;
+                  const toStage = transition.to_stage_id
+                    ? stageById.get(transition.to_stage_id) ?? null
+                    : null;
+                  const actor = transitionActors.get(transition.changed_by_user_id);
+
+                  return (
+                    <div
+                      key={transition.id}
+                      className="rounded-lg border border-gray-100 bg-gray-50 p-4"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        {fromStage ? (
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${colorTokenClasses(fromStage.color_token)}`}
+                          >
+                            {fromStage.label}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-400">No stage</span>
+                        )}
+                        <span className="text-gray-400">→</span>
+                        {toStage ? (
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset ${colorTokenClasses(toStage.color_token)}`}
+                          >
+                            {toStage.label}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-400">No stage</span>
+                        )}
+                      </div>
+                      <p className="mt-3 text-xs text-gray-500">
+                        {actor?.full_name || actor?.email || "Unknown"} ·{" "}
+                        {new Date(transition.changed_at).toLocaleString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                      {transition.notes ? (
+                        <p className="mt-2 text-sm leading-6 text-gray-600">
+                          {transition.notes}
+                        </p>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       ) : null}
     </main>
